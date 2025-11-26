@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,7 @@ interface CompanyDisplay {
   id: string
   name: string
   description?: string | null
+  website?: string | null
   stage: Stage
 }
 
@@ -31,6 +32,42 @@ interface CompanyWithRelations {
   owner: OwnerDisplay | undefined
   tags: Tag[]
   lastContact: string | undefined
+}
+
+// Company logo component with fallback
+function CompanyLogo({ company, size = 'sm' }: { company: CompanyDisplay; size?: 'sm' | 'md' }) {
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [hasError, setHasError] = useState(false)
+  
+  useEffect(() => {
+    if (!company.website) return
+    try {
+      const domain = new URL(company.website.startsWith('http') ? company.website : `https://${company.website}`).hostname
+      setLogoUrl(`https://logo.clearbit.com/${domain}`)
+    } catch {
+      setLogoUrl(null)
+    }
+  }, [company.website])
+  
+  const sizeClass = size === 'sm' ? 'h-7 w-7' : 'h-9 w-9'
+  const textSize = size === 'sm' ? 'text-xs' : 'text-sm'
+  
+  if (logoUrl && !hasError) {
+    return (
+      <img 
+        src={logoUrl}
+        alt={company.name}
+        className={`${sizeClass} rounded-md object-contain bg-white border`}
+        onError={() => setHasError(true)}
+      />
+    )
+  }
+  
+  return (
+    <div className={`flex ${sizeClass} items-center justify-center rounded-md bg-primary/10 text-primary ${textSize} font-medium`}>
+      {company.name.charAt(0)}
+    </div>
+  )
 }
 
 interface PipelineKanbanProps {
@@ -70,9 +107,7 @@ export function PipelineKanban({ companies }: PipelineKanbanProps) {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary text-xs font-medium">
-                        {company.name.charAt(0)}
-                      </div>
+                      <CompanyLogo company={company} size="sm" />
                       <span className="font-medium text-sm">
                         {company.name}
                       </span>

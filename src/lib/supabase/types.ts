@@ -131,9 +131,14 @@ export type Database = {
           founder_email: string | null
           founder_id: string | null
           founder_name: string | null
+          followup_date: string | null
           id: string
+          is_priority: boolean
           last_touch: string | null
+          logo_url: string | null
           name: string
+          needs_diligence: boolean
+          needs_followup: boolean
           owner: string | null
           owner_id: string | null
           stage: Database["public"]["Enums"]["stage"]
@@ -146,9 +151,14 @@ export type Database = {
           founder_email?: string | null
           founder_id?: string | null
           founder_name?: string | null
+          followup_date?: string | null
           id?: string
+          is_priority?: boolean
           last_touch?: string | null
+          logo_url?: string | null
           name: string
+          needs_diligence?: boolean
+          needs_followup?: boolean
           owner?: string | null
           owner_id?: string | null
           stage?: Database["public"]["Enums"]["stage"]
@@ -161,9 +171,14 @@ export type Database = {
           founder_email?: string | null
           founder_id?: string | null
           founder_name?: string | null
+          followup_date?: string | null
           id?: string
+          is_priority?: boolean
           last_touch?: string | null
+          logo_url?: string | null
           name?: string
+          needs_diligence?: boolean
+          needs_followup?: boolean
           owner?: string | null
           owner_id?: string | null
           stage?: Database["public"]["Enums"]["stage"]
@@ -335,15 +350,19 @@ export type Database = {
       founders: {
         Row: {
           additional_emails: string[] | null
+          avatar_url: string | null
           bio: string | null
           created_at: string
           domain_expertise: string[] | null
           education: string | null
           email: string
+          followup_date: string | null
           id: string
+          is_priority: boolean
           linkedin: string | null
           location: string | null
           name: string
+          needs_followup: boolean
           notes: string | null
           previous_companies: string | null
           role_title: string | null
@@ -354,15 +373,19 @@ export type Database = {
         }
         Insert: {
           additional_emails?: string[] | null
+          avatar_url?: string | null
           bio?: string | null
           created_at?: string
           domain_expertise?: string[] | null
           education?: string | null
           email: string
+          followup_date?: string | null
           id?: string
+          is_priority?: boolean
           linkedin?: string | null
           location?: string | null
           name: string
+          needs_followup?: boolean
           notes?: string | null
           previous_companies?: string | null
           role_title?: string | null
@@ -373,15 +396,19 @@ export type Database = {
         }
         Update: {
           additional_emails?: string[] | null
+          avatar_url?: string | null
           bio?: string | null
           created_at?: string
           domain_expertise?: string[] | null
           education?: string | null
           email?: string
+          followup_date?: string | null
           id?: string
+          is_priority?: boolean
           linkedin?: string | null
           location?: string | null
           name?: string
+          needs_followup?: boolean
           notes?: string | null
           previous_companies?: string | null
           role_title?: string | null
@@ -495,11 +522,27 @@ export interface CompanyWithRelations extends Omit<Company, 'owner'> {
   email_threads?: EmailThread[]
 }
 
+// Custom field type
+export interface CustomField {
+  id: string
+  field_name: string
+  field_value: string | null
+  field_type: 'text' | 'url' | 'email' | 'date' | 'number'
+  created_at: string
+  updated_at: string
+}
+
 // Founder with relations
 export interface FounderWithRelations extends Founder {
   companies?: Company[]
   comments?: FounderComment[]
   calendar_events?: CalendarEvent[]
   email_threads?: EmailThread[]
+  custom_fields?: CustomField[]
+}
+
+// Company with custom fields
+export interface CompanyWithRelationsExtended extends CompanyWithRelations {
+  custom_fields?: CustomField[]
 }
 

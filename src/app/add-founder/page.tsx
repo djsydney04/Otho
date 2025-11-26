@@ -41,6 +41,36 @@ export default function AddFounderPage() {
   
   const [newAdditionalEmail, setNewAdditionalEmail] = useState("")
   
+  // Custom fields
+  const [customFields, setCustomFields] = useState<Array<{
+    id: string
+    name: string
+    value: string
+    type: 'text' | 'url' | 'email' | 'date'
+  }>>([])
+  const [showAddField, setShowAddField] = useState(false)
+  const [newFieldName, setNewFieldName] = useState("")
+  const [newFieldType, setNewFieldType] = useState<'text' | 'url' | 'email' | 'date'>('text')
+  
+  const addCustomField = () => {
+    if (!newFieldName.trim()) return
+    setCustomFields([
+      ...customFields,
+      { id: crypto.randomUUID(), name: newFieldName.trim(), value: '', type: newFieldType }
+    ])
+    setNewFieldName("")
+    setNewFieldType('text')
+    setShowAddField(false)
+  }
+  
+  const updateCustomField = (id: string, value: string) => {
+    setCustomFields(customFields.map(f => f.id === id ? { ...f, value } : f))
+  }
+  
+  const removeCustomField = (id: string) => {
+    setCustomFields(customFields.filter(f => f.id !== id))
+  }
+  
   const addAdditionalEmail = () => {
     const email = newAdditionalEmail.trim()
     if (email && !formData.additional_emails.includes(email) && email !== formData.email) {
@@ -146,7 +176,7 @@ export default function AddFounderPage() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
-                  className="h-11"
+                  className="border-0 border-b border-muted-foreground/30 rounded-none focus-visible:ring-0 focus:border-foreground/70 px-0"
                 />
               </div>
               <div className="space-y-2">
@@ -329,6 +359,85 @@ export default function AddFounderPage() {
                 rows={3}
                 className="resize-none"
               />
+            </div>
+            
+            {/* Custom Fields */}
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex items-center justify-between">
+                <Label className="text-base">Custom Fields</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAddField(true)}
+                >
+                  <svg className="h-3.5 w-3.5 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Add Field
+                </Button>
+              </div>
+              
+              {showAddField && (
+                <div className="flex gap-2 p-3 bg-secondary/50 rounded-lg">
+                  <Input
+                    placeholder="Field name..."
+                    value={newFieldName}
+                    onChange={(e) => setNewFieldName(e.target.value)}
+                    className="flex-1 h-9"
+                  />
+                  <select
+                    value={newFieldType}
+                    onChange={(e) => setNewFieldType(e.target.value as any)}
+                    className="h-9 px-3 rounded-md border bg-background text-sm"
+                  >
+                    <option value="text">Text</option>
+                    <option value="url">URL</option>
+                    <option value="email">Email</option>
+                    <option value="date">Date</option>
+                  </select>
+                  <Button type="button" size="sm" onClick={addCustomField} className="h-9">
+                    Add
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddField(false)} className="h-9">
+                    Cancel
+                  </Button>
+                </div>
+              )}
+              
+              {customFields.length > 0 && (
+                <div className="space-y-3">
+                  {customFields.map((field) => (
+                    <div key={field.id} className="flex items-center gap-2">
+                      <Label className="w-32 text-sm text-muted-foreground truncate" title={field.name}>
+                        {field.name}
+                      </Label>
+                      <Input
+                        type={field.type === 'date' ? 'date' : field.type}
+                        placeholder={`Enter ${field.name.toLowerCase()}...`}
+                        value={field.value}
+                        onChange={(e) => updateCustomField(field.id, e.target.value)}
+                        className="flex-1 h-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeCustomField(field.id)}
+                        className="h-10 w-10 flex items-center justify-center rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground smooth"
+                      >
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M18 6L6 18M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {customFields.length === 0 && !showAddField && (
+                <p className="text-sm text-muted-foreground">
+                  No custom fields yet. Add fields to track additional information about this founder.
+                </p>
+              )}
             </div>
             
             {/* Actions */}
