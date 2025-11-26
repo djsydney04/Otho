@@ -1,0 +1,56 @@
+import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { listEvents, matchEventsWithFounders } from "@/lib/integrations/google/calendar"
+import { MOCK_FOUNDERS } from "@/lib/mocks/pipeline"
+
+// GET /api/calendar/events - List calendar events
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.accessToken) {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+
+    const searchParams = request.nextUrl.searchParams
+    const timeMin = searchParams.get("timeMin") || undefined
+    const timeMax = searchParams.get("timeMax") || undefined
+    const companyId = searchParams.get("companyId") || undefined
+    const matchFounders = searchParams.get("matchFounders") === "true"
+
+    // Get events from Google Calendar
+    const events = await listEvents(session.accessToken, {
+      timeMin,
+      timeMax,
+      maxResults: 100,
+    })
+
+    // If we want to match with founders
+    if (matchFounders) {
+      const founderEmails = MOCK_FOUNDERS.map((f) => f.email.toLowerCase())
+      const founderNames = MOCK_FOUNDERS.map((f) => f.name)
+      const matchedEvents = matchEventsWithFounders(events, founderEmails, founderNames)
+      
+      return NextResponse.json({
+        events: matchedEvents,
+        total: matchedEvents.length,
+      })
+    }
+
+    return NextResponse.json({
+      events,
+      total: events.length,
+    })
+  } catch (error: any) {
+    console.error("Calendar events error:", error)
+    return NextResponse.json(
+      { error: error.message || "Failed to fetch events" },
+      { status: 500 }
+    )
+  }
+}
+
