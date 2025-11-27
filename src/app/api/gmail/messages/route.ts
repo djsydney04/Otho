@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     })
 
     if (matchFounders) {
-      const founderEmails = MOCK_FOUNDERS.map((f) => f.email)
+      const founderEmails = MOCK_FOUNDERS.filter(f => f.email).map((f) => f.email!)
       const matched = matchEmailsWithFounders(emails, founderEmails)
       return NextResponse.json({
         emails: matched,

@@ -47,7 +47,7 @@ export const STAGE_CLASSES: Record<Stage, string> = {
   Passed: "stage-passed",
 }
 
-export const MOCK_FOUNDERS: Founder[] = [
+export const MOCK_FOUNDERS: Partial<Founder>[] = [
   {
     id: "f_alex",
     name: "Alex Kim",
@@ -55,10 +55,10 @@ export const MOCK_FOUNDERS: Founder[] = [
     linkedin: "linkedin.com/in/alexkim",
     twitter: "alexkim",
     location: "San Francisco, CA",
-    currentRole: "CEO & Co-founder",
+    role_title: "CEO & Co-founder",
     notes: "Strong technical background. Previously at Google Brain.",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
   {
     id: "f_maria",
@@ -66,10 +66,10 @@ export const MOCK_FOUNDERS: Founder[] = [
     email: "maria@harborstack.com",
     linkedin: "linkedin.com/in/marialopez",
     location: "Austin, TX",
-    currentRole: "CEO & Founder",
+    role_title: "CEO & Founder",
     notes: "Ex-AWS, deep DevOps expertise.",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
   {
     id: "f_john",
@@ -78,10 +78,10 @@ export const MOCK_FOUNDERS: Founder[] = [
     linkedin: "linkedin.com/in/johnchen",
     twitter: "johnchen_fin",
     location: "New York, NY",
-    currentRole: "CEO & Co-founder",
+    role_title: "CEO & Co-founder",
     notes: "Former Goldman Sachs. Deep fintech expertise.",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
   {
     id: "f_sara",
@@ -89,10 +89,10 @@ export const MOCK_FOUNDERS: Founder[] = [
     email: "sara@orbit.health",
     linkedin: "linkedin.com/in/sarapatel",
     location: "Boston, MA",
-    currentRole: "CEO & Founder",
+    role_title: "CEO & Founder",
     notes: "MD/MBA. Previously led digital health at Mass General.",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
   {
     id: "f_james",
@@ -100,10 +100,10 @@ export const MOCK_FOUNDERS: Founder[] = [
     email: "james@copperline.io",
     linkedin: "linkedin.com/in/jamesmiller",
     location: "Seattle, WA",
-    currentRole: "CEO & Co-founder",
+    role_title: "CEO & Co-founder",
     notes: "Hardware background from Tesla Energy.",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
 ]
 

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 import { createServerClient } from "@/lib/supabase/client"
 import type { CompanyInsert } from "@/lib/supabase/types"
 
@@ -16,7 +18,8 @@ export async function GET(request: NextRequest) {
       *,
       founder:founders(*),
       owner:users(*),
-      tags:company_tags(tag:tags(*))
+      tags:company_tags(tag:tags(*)),
+      drive_documents(*)
     `)
     .order("created_at", { ascending: false })
   
@@ -49,6 +52,41 @@ export async function POST(request: NextRequest) {
   const supabase = createServerClient()
   
   try {
+    // Get current user session
+    const session = await getServerSession(authOptions)
+    let owner_id: string | null = null
+    
+    // If user is logged in, find or create them in our users table
+    if (session?.user?.email) {
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", session.user.email)
+        .single()
+      
+      if (existingUser) {
+        owner_id = existingUser.id
+      } else {
+        // Create the user
+        const { data: newUser } = await supabase
+          .from("users")
+          .insert({
+            email: session.user.email,
+            name: session.user.name || session.user.email,
+            avatar_url: session.user.image,
+            initials: session.user.name
+              ? session.user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+              : session.user.email.slice(0, 2).toUpperCase(),
+          })
+          .select("id")
+          .single()
+        
+        if (newUser) {
+          owner_id = newUser.id
+        }
+      }
+    }
+    
     const body = await request.json()
     const { 
       name, 
@@ -91,7 +129,7 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Create the company
+    // Create the company with owner automatically assigned
     const companyData: CompanyInsert = {
       name,
       description,
@@ -100,6 +138,7 @@ export async function POST(request: NextRequest) {
       founder_id,
       founder_name,
       founder_email,
+      owner_id,
     }
     
     const { data: company, error: companyError } = await supabase

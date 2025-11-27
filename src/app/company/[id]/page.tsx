@@ -16,9 +16,38 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 import { useAppStore, syncCalendar, syncEmails, fetchCompanyWithRelations, STAGES, STAGE_CLASSES, formatRelative, type Stage, type CompanyWithRelations } from "@/lib/store"
 import type { CalendarEvent, EmailThread } from "@/lib/supabase/types"
+
+// Types for Drive
+interface DriveFile {
+  id: string
+  name: string
+  mimeType: string
+  iconLink?: string
+  webViewLink?: string
+  thumbnailLink?: string
+  size?: string
+  modifiedTime?: string
+}
+
+interface DriveAttachment {
+  id: string
+  google_file_id: string
+  name: string
+  mime_type?: string
+  icon_link?: string
+  web_view_link?: string
+  thumbnail_link?: string
+}
 
 // Icons
 function ArrowLeftIcon({ className }: { className?: string }) {
@@ -205,6 +234,73 @@ function LinkedInIcon({ className }: { className?: string }) {
   )
 }
 
+function GoogleDriveIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 87.3 78" fill="none">
+      <path d="M6.6 66.85L3.3 61.35l26.4-45.6h26.4l-26.4 45.6H6.6z" fill="#0066DA"/>
+      <path d="M29.7 61.35l26.4-45.6h26.4L56.1 61.35H29.7z" fill="#00AC47"/>
+      <path d="L56.1 61.35l13.2 22.95H-3l13.2-22.95H56.1z" fill="#EA4335"/>
+      <path d="M87.3 61.35L74.1 78H43.65l13.2-22.95L69.9 78l17.4-16.65z" fill="#00832D"/>
+      <path d="M29.7 61.35L43.65 78H12.9L-0.3 61.35H29.7z" fill="#2684FC"/>
+      <path d="M56.1 15.75l-26.4 45.6L16.5 78H43.65l26.25-45.6L56.1 15.75z" fill="#FFBA00"/>
+    </svg>
+  )
+}
+
+function FolderIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+    </svg>
+  )
+}
+
+function FileIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  )
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  )
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+    </svg>
+  )
+}
+
+function ExternalLinkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  )
+}
+
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  )
+}
+
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString('en-US', {
     month: 'short',
@@ -227,6 +323,13 @@ export default function CompanyDetailPage() {
   const [expandedEmails, setExpandedEmails] = useState<Set<string>>(new Set())
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   
+  // Drive state
+  const [driveAttachments, setDriveAttachments] = useState<DriveAttachment[]>([])
+  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([])
+  const [driveSearchQuery, setDriveSearchQuery] = useState("")
+  const [loadingDrive, setLoadingDrive] = useState(false)
+  const [driveDialogOpen, setDriveDialogOpen] = useState(false)
+  
   // Fetch logo from website
   useEffect(() => {
     if (company?.website) {
@@ -238,6 +341,71 @@ export default function CompanyDetailPage() {
         .catch(() => {})
     }
   }, [company?.website])
+  
+  // Fetch Drive attachments
+  useEffect(() => {
+    if (!companyId) return
+    
+    fetch(`/api/companies/${companyId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.drive_documents) setDriveAttachments(data.drive_documents)
+      })
+      .catch(() => {})
+  }, [companyId])
+  
+  // Search Drive files
+  const searchDriveFiles = async (query?: string) => {
+    if (!session?.accessToken) return
+    setLoadingDrive(true)
+    try {
+      const url = query 
+        ? `/api/drive/files?query=${encodeURIComponent(query)}`
+        : `/api/drive/files?type=recent`
+      const res = await fetch(url)
+      const data = await res.json()
+      setDriveFiles(data.files || [])
+    } catch (error) {
+      console.error("Error searching Drive:", error)
+    } finally {
+      setLoadingDrive(false)
+    }
+  }
+  
+  // Attach Drive file
+  const attachDriveFile = async (file: DriveFile) => {
+    try {
+      const res = await fetch("/api/drive/attach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId: file.id, companyId }),
+      })
+      if (res.ok) {
+        const attachment = await res.json()
+        setDriveAttachments(prev => [...prev, attachment])
+        setDriveDialogOpen(false)
+      }
+    } catch (error) {
+      console.error("Error attaching Drive file:", error)
+    }
+  }
+  
+  // Remove Drive attachment
+  const removeDriveAttachment = async (attachmentId: string) => {
+    try {
+      await fetch(`/api/drive/attach?id=${attachmentId}`, { method: "DELETE" })
+      setDriveAttachments(prev => prev.filter(a => a.id !== attachmentId))
+    } catch (error) {
+      console.error("Error removing Drive attachment:", error)
+    }
+  }
+  
+  // Load Drive files when dialog opens
+  useEffect(() => {
+    if (driveDialogOpen && session?.accessToken) {
+      searchDriveFiles()
+    }
+  }, [driveDialogOpen, session?.accessToken])
   
   const toggleFlag = async (flag: 'needs_followup' | 'needs_diligence' | 'is_priority') => {
     if (!company) return
@@ -384,37 +552,43 @@ export default function CompanyDetailPage() {
           </div>
           
           <div className="flex items-center gap-2">
-            {/* Action Buttons */}
+            {/* Action Buttons with descriptive tooltips */}
             <button
               onClick={() => toggleFlag('is_priority')}
-              className={`flex h-9 w-9 items-center justify-center rounded-lg border smooth ${
+              className={`group relative flex h-9 w-9 items-center justify-center rounded-lg border smooth ${
                 (company as any).is_priority 
                   ? 'bg-amber-50 border-amber-200 text-amber-600' 
                   : 'hover:bg-secondary text-muted-foreground'
               }`}
-              title={`${(company as any).is_priority ? 'Remove from' : 'Mark as'} priority`}
+              title={(company as any).is_priority 
+                ? "Priority: This company is marked as high priority. Click to remove." 
+                : "Priority: Mark this company as high priority for quick access and focus."}
             >
               <StarIcon className="h-4 w-4" filled={(company as any).is_priority} />
             </button>
             <button
               onClick={() => toggleFlag('needs_followup')}
-              className={`flex h-9 w-9 items-center justify-center rounded-lg border smooth ${
+              className={`group relative flex h-9 w-9 items-center justify-center rounded-lg border smooth ${
                 (company as any).needs_followup 
                   ? 'bg-blue-50 border-blue-200 text-blue-600' 
                   : 'hover:bg-secondary text-muted-foreground'
               }`}
-              title={`${(company as any).needs_followup ? 'Remove' : 'Set'} follow-up reminder`}
+              title={(company as any).needs_followup 
+                ? "Follow-up: You need to follow up with this company. Click to clear reminder." 
+                : "Follow-up: Set a reminder to follow up with this company later."}
             >
               <BellIcon className="h-4 w-4" />
             </button>
             <button
               onClick={() => toggleFlag('needs_diligence')}
-              className={`flex h-9 w-9 items-center justify-center rounded-lg border smooth ${
+              className={`group relative flex h-9 w-9 items-center justify-center rounded-lg border smooth ${
                 (company as any).needs_diligence 
                   ? 'bg-purple-50 border-purple-200 text-purple-600' 
                   : 'hover:bg-secondary text-muted-foreground'
               }`}
-              title={`${(company as any).needs_diligence ? 'Remove' : 'Mark for'} diligence`}
+              title={(company as any).needs_diligence 
+                ? "Diligence: This company needs more research/diligence. Click to mark complete." 
+                : "Diligence: Mark this company as needing more research and due diligence."}
             >
               <SearchCheckIcon className="h-4 w-4" />
             </button>
@@ -831,6 +1005,118 @@ export default function CompanyDetailPage() {
                     <GoogleCalendarIcon className="h-4 w-4 mr-2" />
                     Connect Calendar
                   </Button>
+                )}
+              </CardContent>
+            </Card>
+            
+            {/* Google Drive Card */}
+            <Card className="elevated">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+                    Google Drive
+                  </CardTitle>
+                  <Dialog open={driveDialogOpen} onOpenChange={setDriveDialogOpen}>
+                    <DialogTrigger asChild>
+                      <button 
+                        className="p-1 rounded hover:bg-secondary smooth"
+                        title="Attach file"
+                        disabled={!session}
+                      >
+                        <PlusIcon className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-lg">
+                      <DialogHeader>
+                        <DialogTitle>Attach Google Drive File</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Search files..."
+                            value={driveSearchQuery}
+                            onChange={(e) => setDriveSearchQuery(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && searchDriveFiles(driveSearchQuery)}
+                          />
+                          <Button onClick={() => searchDriveFiles(driveSearchQuery)} disabled={loadingDrive}>
+                            <SearchIcon className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="max-h-72 overflow-y-auto divide-y">
+                          {loadingDrive ? (
+                            <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>
+                          ) : driveFiles.length > 0 ? (
+                            driveFiles.map((file) => (
+                              <button
+                                key={file.id}
+                                onClick={() => attachDriveFile(file)}
+                                className="w-full flex items-center gap-3 p-3 hover:bg-secondary/50 smooth text-left"
+                              >
+                                {file.iconLink ? (
+                                  <img src={file.iconLink} alt="" className="h-5 w-5" />
+                                ) : (
+                                  <FileIcon className="h-5 w-5 text-muted-foreground" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{file.name}</p>
+                                  {file.modifiedTime && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Modified {formatRelative(file.modifiedTime)}
+                                    </p>
+                                  )}
+                                </div>
+                              </button>
+                            ))
+                          ) : (
+                            <p className="py-8 text-center text-sm text-muted-foreground">
+                              {session ? "No files found" : "Connect Google to see files"}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {driveAttachments.length > 0 ? (
+                  <div className="space-y-2">
+                    {driveAttachments.map((attachment) => (
+                      <div 
+                        key={attachment.id}
+                        className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50 group"
+                      >
+                        {attachment.icon_link ? (
+                          <img src={attachment.icon_link} alt="" className="h-4 w-4" />
+                        ) : (
+                          <FileIcon className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <span className="flex-1 text-sm truncate">{attachment.name}</span>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 smooth">
+                          {attachment.web_view_link && (
+                            <a 
+                              href={attachment.web_view_link} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="p-1 rounded hover:bg-secondary"
+                            >
+                              <ExternalLinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                            </a>
+                          )}
+                          <button 
+                            onClick={() => removeDriveAttachment(attachment.id)}
+                            className="p-1 rounded hover:bg-destructive/10"
+                          >
+                            <TrashIcon className="h-3.5 w-3.5 text-destructive" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    No files attached
+                  </p>
                 )}
               </CardContent>
             </Card>

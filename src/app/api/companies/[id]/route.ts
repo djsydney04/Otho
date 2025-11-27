@@ -18,7 +18,8 @@ export async function GET(
       tags:company_tags(tag:tags(*)),
       comments(*, author:users(*)),
       calendar_events(*),
-      email_threads(*)
+      email_threads(*),
+      drive_documents(*)
     `)
     .eq("id", id)
     .single()

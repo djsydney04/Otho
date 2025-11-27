@@ -7,6 +7,12 @@ declare module "next-auth" {
     accessToken?: string
     refreshToken?: string
     error?: string
+    user: {
+      id?: string
+      name?: string | null
+      email?: string | null
+      image?: string | null
+    }
   }
 }
 
@@ -76,6 +82,9 @@ export const authOptions: NextAuthOptions = {
             // Gmail
             "https://www.googleapis.com/auth/gmail.readonly",
             "https://www.googleapis.com/auth/gmail.labels",
+            // Google Drive
+            "https://www.googleapis.com/auth/drive.readonly",
+            "https://www.googleapis.com/auth/drive.file",
           ].join(" "),
           prompt: "consent",
           access_type: "offline",
@@ -109,6 +118,12 @@ export const authOptions: NextAuthOptions = {
       session.accessToken = token.accessToken as string
       session.refreshToken = token.refreshToken as string
       session.error = token.error as string | undefined
+      if (token.sub) {
+        session.user.id = token.sub
+      }
+      if (token.email) {
+        session.user.email = token.email as string
+      }
       return session
     },
   },

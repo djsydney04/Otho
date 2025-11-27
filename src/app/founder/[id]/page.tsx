@@ -9,8 +9,35 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { formatRelative, syncCalendar, syncEmails } from "@/lib/store"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { formatRelative, syncCalendar, syncEmails, useAppStore } from "@/lib/store"
 import type { FounderWithRelations, Company, FounderComment, CalendarEvent, EmailThread } from "@/lib/supabase/types"
+
+// Types for Drive
+interface DriveFile {
+  id: string
+  name: string
+  mimeType: string
+  iconLink?: string
+  webViewLink?: string
+  thumbnailLink?: string
+  modifiedTime?: string
+}
+
+interface DriveAttachment {
+  id: string
+  google_file_id: string
+  name: string
+  mime_type?: string
+  icon_link?: string
+  web_view_link?: string
+}
 
 // Icons
 function ArrowLeftIcon({ className }: { className?: string }) {
@@ -165,6 +192,73 @@ function VideoIcon({ className }: { className?: string }) {
   )
 }
 
+function GoogleDriveIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 87.3 78" fill="none">
+      <path d="M6.6 66.85L3.3 61.35l26.4-45.6h26.4l-26.4 45.6H6.6z" fill="#0066DA"/>
+      <path d="M29.7 61.35l26.4-45.6h26.4L56.1 61.35H29.7z" fill="#00AC47"/>
+      <path d="L56.1 61.35l13.2 22.95H-3l13.2-22.95H56.1z" fill="#EA4335"/>
+      <path d="M87.3 61.35L74.1 78H43.65l13.2-22.95L69.9 78l17.4-16.65z" fill="#00832D"/>
+      <path d="M29.7 61.35L43.65 78H12.9L-0.3 61.35H29.7z" fill="#2684FC"/>
+      <path d="M56.1 15.75l-26.4 45.6L16.5 78H43.65l26.25-45.6L56.1 15.75z" fill="#FFBA00"/>
+    </svg>
+  )
+}
+
+function FileIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  )
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  )
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+    </svg>
+  )
+}
+
+function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  )
+}
+
+function ExternalLinkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  )
+}
+
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  )
+}
+
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString('en-US', {
     month: 'short',
@@ -192,11 +286,19 @@ export default function FounderDetailPage() {
   const router = useRouter()
   const founderId = params.id as string
   const { data: session } = useSession()
+  const { syncing, emailSyncing } = useAppStore()
   
   const [founder, setFounder] = useState<FounderWithRelations | null>(null)
   const [loading, setLoading] = useState(true)
   const [newComment, setNewComment] = useState("")
   const [addingComment, setAddingComment] = useState(false)
+  
+  // Drive state
+  const [driveAttachments, setDriveAttachments] = useState<DriveAttachment[]>([])
+  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([])
+  const [driveSearchQuery, setDriveSearchQuery] = useState("")
+  const [loadingDrive, setLoadingDrive] = useState(false)
+  const [driveDialogOpen, setDriveDialogOpen] = useState(false)
   
   useEffect(() => {
     async function loadFounder() {
@@ -207,6 +309,71 @@ export default function FounderDetailPage() {
     }
     loadFounder()
   }, [founderId])
+  
+  // Fetch Drive attachments for founder
+  useEffect(() => {
+    if (!founderId) return
+    
+    fetch(`/api/founders/${founderId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.drive_documents) setDriveAttachments(data.drive_documents)
+      })
+      .catch(() => {})
+  }, [founderId])
+  
+  // Search Drive files
+  const searchDriveFiles = async (query?: string) => {
+    if (!session?.accessToken) return
+    setLoadingDrive(true)
+    try {
+      const url = query 
+        ? `/api/drive/files?query=${encodeURIComponent(query)}`
+        : `/api/drive/files?type=recent`
+      const res = await fetch(url)
+      const data = await res.json()
+      setDriveFiles(data.files || [])
+    } catch (error) {
+      console.error("Error searching Drive:", error)
+    } finally {
+      setLoadingDrive(false)
+    }
+  }
+  
+  // Attach Drive file
+  const attachDriveFile = async (file: DriveFile) => {
+    try {
+      const res = await fetch("/api/drive/attach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId: file.id, founderId }),
+      })
+      if (res.ok) {
+        const attachment = await res.json()
+        setDriveAttachments(prev => [...prev, attachment])
+        setDriveDialogOpen(false)
+      }
+    } catch (error) {
+      console.error("Error attaching Drive file:", error)
+    }
+  }
+  
+  // Remove Drive attachment
+  const removeDriveAttachment = async (attachmentId: string) => {
+    try {
+      await fetch(`/api/drive/attach?id=${attachmentId}`, { method: "DELETE" })
+      setDriveAttachments(prev => prev.filter(a => a.id !== attachmentId))
+    } catch (error) {
+      console.error("Error removing Drive attachment:", error)
+    }
+  }
+  
+  // Load Drive files when dialog opens
+  useEffect(() => {
+    if (driveDialogOpen && session?.accessToken) {
+      searchDriveFiles()
+    }
+  }, [driveDialogOpen, session?.accessToken])
   
   const handleAddComment = async () => {
     if (!newComment.trim()) return
@@ -410,7 +577,132 @@ export default function FounderDetailPage() {
               </div>
             )}
             
-            {/* Activity / Comments */}
+          
+
+              {/* Meetings */}
+              <Card className="elevated">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+                      Meetings
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{calendarEvents.length}</span>
+                      <button 
+                        onClick={handleSync}
+                        className="p-1 rounded hover:bg-secondary smooth"
+                        title="Sync calendar"
+                      >
+                        <RefreshIcon className={`h-3.5 w-3.5 text-muted-foreground ${syncing ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {calendarEvents.length > 0 ? (
+                    <div className="divide-y max-h-64 overflow-y-auto">
+                      {calendarEvents.slice(0, 10).map((event: CalendarEvent) => (
+                        <div key={event.id} className="px-6 py-3 hover:bg-secondary/30 smooth">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 mt-0.5">
+                              {event.meet_link ? (
+                                <VideoIcon className="h-4 w-4 text-primary" />
+                              ) : (
+                                <CalendarIcon className="h-4 w-4 text-primary" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{event.title}</p>
+                              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                                <ClockIcon className="h-3 w-3" />
+                                {formatDate(event.start_time)}
+                              </div>
+                            </div>
+                            {event.html_link && (
+                              <a 
+                                href={event.html_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-primary hover:underline"
+                              >
+                                Open
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 text-center px-6">
+                      <CalendarIcon className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                      <p className="text-sm text-muted-foreground">No meetings found</p>
+                      <p className="text-xs text-muted-foreground mt-1">Sync your calendar to see meetings</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Emails */}
+              <Card className="elevated">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+                      Emails
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{emailThreads.length}</span>
+                      <button 
+                        onClick={handleSync}
+                        className="p-1 rounded hover:bg-secondary smooth"
+                        title="Sync inbox"
+                      >
+                        <RefreshIcon className={`h-3.5 w-3.5 text-muted-foreground ${emailSyncing ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {emailThreads.length > 0 ? (
+                    <div className="divide-y max-h-80 overflow-y-auto">
+                      {emailThreads.slice(0, 10).map((email: EmailThread) => (
+                        <div 
+                          key={email.id} 
+                          className="px-6 py-3 hover:bg-secondary/30 smooth"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary mt-0.5">
+                              <MailIcon className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-medium text-sm truncate">
+                                  {email.subject || "(No subject)"}
+                                </p>
+                                <ChevronDownIcon className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 smooth" />
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate mt-1">
+                                {email.snippet}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {email.email_date ? formatRelative(email.email_date) : ""}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 text-center px-6">
+                      <InboxIcon className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                      <p className="text-sm text-muted-foreground">No emails found</p>
+                      <p className="text-xs text-muted-foreground mt-1">Sync your inbox to see emails</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              
+              {/* Activity / Comments */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
@@ -444,7 +736,6 @@ export default function FounderDetailPage() {
                   </Button>
                 </div>
               </div>
-              
               {/* Comments Timeline */}
               <div className="space-y-4 pt-2">
                 {comments.map((comment: any, index: number) => {
@@ -575,99 +866,114 @@ export default function FounderDetailPage() {
               </Card>
             )}
             
-            {/* Meetings */}
+            {/* Google Drive */}
             <Card className="elevated">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-                    Meetings
+                    Google Drive
                   </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{calendarEvents.length}</span>
-                    <button 
-                      onClick={handleSync}
-                      className="p-1 rounded hover:bg-secondary smooth"
-                      title="Sync calendar"
-                    >
-                      <RefreshIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                    </button>
-                  </div>
+                  <Dialog open={driveDialogOpen} onOpenChange={setDriveDialogOpen}>
+                    <DialogTrigger asChild>
+                      <button 
+                        className="p-1 rounded hover:bg-secondary smooth"
+                        title="Attach file"
+                        disabled={!session}
+                      >
+                        <PlusIcon className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-lg">
+                      <DialogHeader>
+                        <DialogTitle>Attach Google Drive File</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Search files..."
+                            value={driveSearchQuery}
+                            onChange={(e) => setDriveSearchQuery(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && searchDriveFiles(driveSearchQuery)}
+                          />
+                          <Button onClick={() => searchDriveFiles(driveSearchQuery)} disabled={loadingDrive}>
+                            <SearchIcon className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="max-h-72 overflow-y-auto divide-y">
+                          {loadingDrive ? (
+                            <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>
+                          ) : driveFiles.length > 0 ? (
+                            driveFiles.map((file) => (
+                              <button
+                                key={file.id}
+                                onClick={() => attachDriveFile(file)}
+                                className="w-full flex items-center gap-3 p-3 hover:bg-secondary/50 smooth text-left"
+                              >
+                                {file.iconLink ? (
+                                  <img src={file.iconLink} alt="" className="h-5 w-5" />
+                                ) : (
+                                  <FileIcon className="h-5 w-5 text-muted-foreground" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{file.name}</p>
+                                  {file.modifiedTime && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Modified {formatRelative(file.modifiedTime)}
+                                    </p>
+                                  )}
+                                </div>
+                              </button>
+                            ))
+                          ) : (
+                            <p className="py-8 text-center text-sm text-muted-foreground">
+                              {session ? "No files found" : "Connect Google to see files"}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </CardHeader>
-              <CardContent className="p-0">
-                {calendarEvents.length > 0 ? (
-                  <div className="divide-y max-h-64 overflow-y-auto">
-                    {calendarEvents.slice(0, 10).map((event: CalendarEvent) => (
-                      <div key={event.id} className="px-6 py-3 hover:bg-secondary/30 smooth">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 mt-0.5">
-                            {event.meet_link ? (
-                              <VideoIcon className="h-4 w-4 text-primary" />
-                            ) : (
-                              <CalendarIcon className="h-4 w-4 text-primary" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{event.title}</p>
-                            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                              <ClockIcon className="h-3 w-3" />
-                              {formatDate(event.start_time)}
-                            </div>
-                          </div>
+              <CardContent>
+                {driveAttachments.length > 0 ? (
+                  <div className="space-y-2">
+                    {driveAttachments.map((attachment) => (
+                      <div 
+                        key={attachment.id}
+                        className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50 group"
+                      >
+                        {attachment.icon_link ? (
+                          <img src={attachment.icon_link} alt="" className="h-4 w-4" />
+                        ) : (
+                          <FileIcon className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <span className="flex-1 text-sm truncate">{attachment.name}</span>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 smooth">
+                          {attachment.web_view_link && (
+                            <a 
+                              href={attachment.web_view_link} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="p-1 rounded hover:bg-secondary"
+                            >
+                              <ExternalLinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                            </a>
+                          )}
+                          <button 
+                            onClick={() => removeDriveAttachment(attachment.id)}
+                            className="p-1 rounded hover:bg-destructive/10"
+                          >
+                            <TrashIcon className="h-3.5 w-3.5 text-destructive" />
+                          </button>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-8 text-center px-6">
-                    <CalendarIcon className="h-8 w-8 text-muted-foreground/50 mb-2" />
-                    <p className="text-sm text-muted-foreground">No meetings found</p>
-                    <p className="text-xs text-muted-foreground mt-1">Sync your calendar to see meetings</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            {/* Emails */}
-            <Card className="elevated">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-                    Emails
-                  </CardTitle>
-                  <span className="text-xs text-muted-foreground">{emailThreads.length}</span>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {emailThreads.length > 0 ? (
-                  <div className="divide-y max-h-64 overflow-y-auto">
-                    {emailThreads.slice(0, 10).map((email: EmailThread) => (
-                      <div key={email.id} className="px-6 py-3 hover:bg-secondary/30 smooth">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary mt-0.5">
-                            <MailIcon className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">
-                              {email.subject || "(No subject)"}
-                            </p>
-                            <p className="text-xs text-muted-foreground truncate mt-0.5">
-                              {email.snippet}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {email.email_date ? formatRelative(email.email_date) : ""}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-8 text-center px-6">
-                    <InboxIcon className="h-8 w-8 text-muted-foreground/50 mb-2" />
-                    <p className="text-sm text-muted-foreground">No emails found</p>
-                    <p className="text-xs text-muted-foreground mt-1">Sync your inbox to see emails</p>
-                  </div>
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    No files attached
+                  </p>
                 )}
               </CardContent>
             </Card>

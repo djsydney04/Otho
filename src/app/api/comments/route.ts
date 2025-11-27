@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 import { createServerClient } from "@/lib/supabase/client"
 
 // GET /api/comments - List comments (optionally filtered by company)
@@ -35,8 +37,43 @@ export async function POST(request: NextRequest) {
   const supabase = createServerClient()
   
   try {
+    // Get current user session
+    const session = await getServerSession(authOptions)
+    let author_id: string | null = null
+    
+    // If user is logged in, find or create them in our users table
+    if (session?.user?.email) {
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", session.user.email)
+        .single()
+      
+      if (existingUser) {
+        author_id = existingUser.id
+      } else {
+        // Create the user
+        const { data: newUser } = await supabase
+          .from("users")
+          .insert({
+            email: session.user.email,
+            name: session.user.name || session.user.email,
+            avatar_url: session.user.image,
+            initials: session.user.name
+              ? session.user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+              : session.user.email.slice(0, 2).toUpperCase(),
+          })
+          .select("id")
+          .single()
+        
+        if (newUser) {
+          author_id = newUser.id
+        }
+      }
+    }
+    
     const body = await request.json()
-    const { company_id, content, comment_type = "note", author_id } = body
+    const { company_id, content, comment_type = "note" } = body
     
     if (!company_id || !content) {
       return NextResponse.json(

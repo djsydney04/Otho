@@ -31,8 +31,8 @@ export async function GET(request: NextRequest) {
 
     // If we want to match with founders
     if (matchFounders) {
-      const founderEmails = MOCK_FOUNDERS.map((f) => f.email.toLowerCase())
-      const founderNames = MOCK_FOUNDERS.map((f) => f.name)
+      const founderEmails = MOCK_FOUNDERS.filter(f => f.email).map((f) => f.email!.toLowerCase())
+      const founderNames = MOCK_FOUNDERS.filter(f => f.name).map((f) => f.name!)
       const matchedEvents = matchEventsWithFounders(events, founderEmails, founderNames)
       
       return NextResponse.json({

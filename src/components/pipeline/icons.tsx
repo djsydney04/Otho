@@ -208,3 +208,21 @@ export function ArrowLeftIcon({ className }: { className?: string }) {
   )
 }
 
+export function GoogleDriveIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <path d="M7.71 3.5L1.15 15l3.43 5.5 6.56-11L7.71 3.5z" fill="#0066DA"/>
+      <path d="M16.29 3.5H7.71l6.56 11h8.58l-6.56-11z" fill="#00AC47"/>
+      <path d="M1.15 15l3.43 5.5h14.84l3.43-5.5H1.15z" fill="#EA4335"/>
+    </svg>
+  )
+}
+
+export function FolderIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+    </svg>
+  )
+}
+

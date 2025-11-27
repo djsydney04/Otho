@@ -10,7 +10,10 @@ export async function GET(request: NextRequest) {
   
   let query = supabase
     .from("founders")
-    .select("*")
+    .select(`
+      *,
+      drive_documents(*)
+    `)
     .order("name")
   
   if (search) {

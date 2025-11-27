@@ -128,17 +128,17 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          followup_date: string | null
           founder_email: string | null
           founder_id: string | null
           founder_name: string | null
-          followup_date: string | null
           id: string
-          is_priority: boolean
+          is_priority: boolean | null
           last_touch: string | null
           logo_url: string | null
           name: string
-          needs_diligence: boolean
-          needs_followup: boolean
+          needs_diligence: boolean | null
+          needs_followup: boolean | null
           owner: string | null
           owner_id: string | null
           stage: Database["public"]["Enums"]["stage"]
@@ -148,17 +148,17 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          followup_date?: string | null
           founder_email?: string | null
           founder_id?: string | null
           founder_name?: string | null
-          followup_date?: string | null
           id?: string
-          is_priority?: boolean
+          is_priority?: boolean | null
           last_touch?: string | null
           logo_url?: string | null
           name: string
-          needs_diligence?: boolean
-          needs_followup?: boolean
+          needs_diligence?: boolean | null
+          needs_followup?: boolean | null
           owner?: string | null
           owner_id?: string | null
           stage?: Database["public"]["Enums"]["stage"]
@@ -168,17 +168,17 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          followup_date?: string | null
           founder_email?: string | null
           founder_id?: string | null
           founder_name?: string | null
-          followup_date?: string | null
           id?: string
-          is_priority?: boolean
+          is_priority?: boolean | null
           last_touch?: string | null
           logo_url?: string | null
           name?: string
-          needs_diligence?: boolean
-          needs_followup?: boolean
+          needs_diligence?: boolean | null
+          needs_followup?: boolean | null
           owner?: string | null
           owner_id?: string | null
           stage?: Database["public"]["Enums"]["stage"]
@@ -198,6 +198,44 @@ export type Database = {
             columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_custom_fields: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          field_name: string
+          field_type: string | null
+          field_value: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          field_name: string
+          field_type?: string | null
+          field_value?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          field_name?: string
+          field_type?: string | null
+          field_value?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_custom_fields_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -228,6 +266,76 @@ export type Database = {
             columns: ["tag_id"]
             isOneToOne: false
             referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drive_documents: {
+        Row: {
+          company_id: string | null
+          created_at: string | null
+          founder_id: string | null
+          google_file_id: string
+          icon_link: string | null
+          id: string
+          mime_type: string | null
+          name: string
+          size_bytes: number | null
+          thumbnail_link: string | null
+          updated_at: string | null
+          user_id: string | null
+          web_view_link: string | null
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string | null
+          founder_id?: string | null
+          google_file_id: string
+          icon_link?: string | null
+          id?: string
+          mime_type?: string | null
+          name: string
+          size_bytes?: number | null
+          thumbnail_link?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          web_view_link?: string | null
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string | null
+          founder_id?: string | null
+          google_file_id?: string
+          icon_link?: string | null
+          id?: string
+          mime_type?: string | null
+          name?: string
+          size_bytes?: number | null
+          thumbnail_link?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          web_view_link?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drive_documents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drive_documents_founder_id_fkey"
+            columns: ["founder_id"]
+            isOneToOne: false
+            referencedRelation: "founders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drive_documents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -347,6 +455,44 @@ export type Database = {
           },
         ]
       }
+      founder_custom_fields: {
+        Row: {
+          created_at: string | null
+          field_name: string
+          field_type: string | null
+          field_value: string | null
+          founder_id: string
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          field_name: string
+          field_type?: string | null
+          field_value?: string | null
+          founder_id: string
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          field_name?: string
+          field_type?: string | null
+          field_value?: string | null
+          founder_id?: string
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "founder_custom_fields_founder_id_fkey"
+            columns: ["founder_id"]
+            isOneToOne: false
+            referencedRelation: "founders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       founders: {
         Row: {
           additional_emails: string[] | null
@@ -358,11 +504,11 @@ export type Database = {
           email: string
           followup_date: string | null
           id: string
-          is_priority: boolean
+          is_priority: boolean | null
           linkedin: string | null
           location: string | null
           name: string
-          needs_followup: boolean
+          needs_followup: boolean | null
           notes: string | null
           previous_companies: string | null
           role_title: string | null
@@ -381,11 +527,11 @@ export type Database = {
           email: string
           followup_date?: string | null
           id?: string
-          is_priority?: boolean
+          is_priority?: boolean | null
           linkedin?: string | null
           location?: string | null
           name: string
-          needs_followup?: boolean
+          needs_followup?: boolean | null
           notes?: string | null
           previous_companies?: string | null
           role_title?: string | null
@@ -404,11 +550,11 @@ export type Database = {
           email?: string
           followup_date?: string | null
           id?: string
-          is_priority?: boolean
+          is_priority?: boolean | null
           linkedin?: string | null
           location?: string | null
           name?: string
-          needs_followup?: boolean
+          needs_followup?: boolean | null
           notes?: string | null
           previous_companies?: string | null
           role_title?: string | null
@@ -418,6 +564,82 @@ export type Database = {
           warm_intro_path?: string | null
         }
         Relationships: []
+      }
+      notion_pages: {
+        Row: {
+          company_id: string | null
+          cover_url: string | null
+          created_at: string | null
+          founder_id: string | null
+          icon: string | null
+          id: string
+          last_edited_time: string | null
+          notion_page_id: string
+          parent_id: string | null
+          parent_type: string | null
+          properties: Json | null
+          title: string
+          updated_at: string | null
+          url: string | null
+          user_id: string | null
+        }
+        Insert: {
+          company_id?: string | null
+          cover_url?: string | null
+          created_at?: string | null
+          founder_id?: string | null
+          icon?: string | null
+          id?: string
+          last_edited_time?: string | null
+          notion_page_id: string
+          parent_id?: string | null
+          parent_type?: string | null
+          properties?: Json | null
+          title: string
+          updated_at?: string | null
+          url?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          company_id?: string | null
+          cover_url?: string | null
+          created_at?: string | null
+          founder_id?: string | null
+          icon?: string | null
+          id?: string
+          last_edited_time?: string | null
+          notion_page_id?: string
+          parent_id?: string | null
+          parent_type?: string | null
+          properties?: Json | null
+          title?: string
+          updated_at?: string | null
+          url?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notion_pages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notion_pages_founder_id_fkey"
+            columns: ["founder_id"]
+            isOneToOne: false
+            referencedRelation: "founders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notion_pages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tags: {
         Row: {
@@ -445,6 +667,9 @@ export type Database = {
           id: string
           initials: string | null
           name: string
+          notion_access_token: string | null
+          notion_workspace_id: string | null
+          notion_workspace_name: string | null
           updated_at: string
         }
         Insert: {
@@ -457,6 +682,9 @@ export type Database = {
           id?: string
           initials?: string | null
           name: string
+          notion_access_token?: string | null
+          notion_workspace_id?: string | null
+          notion_workspace_name?: string | null
           updated_at?: string
         }
         Update: {
@@ -469,6 +697,9 @@ export type Database = {
           id?: string
           initials?: string | null
           name?: string
+          notion_access_token?: string | null
+          notion_workspace_id?: string | null
+          notion_workspace_name?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -509,6 +740,8 @@ export type FounderCommentInsert = TablesInsert<"founder_comments">
 export type Tag = Tables<"tags">
 export type CalendarEvent = Tables<"calendar_events">
 export type EmailThread = Tables<"email_threads">
+export type DriveDocument = Tables<"drive_documents">
+export type NotionPage = Tables<"notion_pages">
 export type Stage = Enums<"stage">
 export type CommentType = Enums<"comment_type">
 
@@ -520,6 +753,8 @@ export interface CompanyWithRelations extends Omit<Company, 'owner'> {
   comments?: Comment[]
   calendar_events?: CalendarEvent[]
   email_threads?: EmailThread[]
+  drive_documents?: DriveDocument[]
+  notion_pages?: NotionPage[]
 }
 
 // Custom field type
@@ -539,10 +774,11 @@ export interface FounderWithRelations extends Founder {
   calendar_events?: CalendarEvent[]
   email_threads?: EmailThread[]
   custom_fields?: CustomField[]
+  drive_documents?: DriveDocument[]
+  notion_pages?: NotionPage[]
 }
 
 // Company with custom fields
 export interface CompanyWithRelationsExtended extends CompanyWithRelations {
   custom_fields?: CustomField[]
 }
-

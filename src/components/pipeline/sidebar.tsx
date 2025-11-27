@@ -16,6 +16,7 @@ import {
   CheckIcon,
   RefreshIcon,
   LogOutIcon,
+  GoogleDriveIcon,
 } from "./icons"
 
 type SidebarItemProps = {
@@ -56,7 +57,7 @@ interface SidebarProps {
 
 export function Sidebar({ activePage = "pipeline" }: SidebarProps) {
   const { data: session, status } = useSession()
-  const { lastSyncTime, syncing, emailSyncing, lastEmailSyncTime, clearCalendarData, clearEmailData } = useAppStore()
+  const { lastSyncTime, syncing, emailSyncing, clearCalendarData, clearEmailData } = useAppStore()
 
   const handleConnectGoogle = () => {
     signIn("google")
@@ -127,68 +128,79 @@ export function Sidebar({ activePage = "pipeline" }: SidebarProps) {
         
         <div className="my-5 border-t" />
         
-        <p className="mb-2 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        <p className="mb-3 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
           Integrations
         </p>
         
-        {session ? (
-          <div className="space-y-3">
-            {/* Calendar Connected */}
-            <div className="space-y-2">
-              <div className="connected flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm">
-                <GoogleCalendarIcon className="h-4 w-4 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <span className="font-medium block text-xs">Calendar</span>
-                  {lastSyncTime && (
-                    <span className="text-[10px] text-muted-foreground">
-                      {formatRelative(lastSyncTime.toISOString())}
-                    </span>
-                  )}
-                </div>
-                <CheckIcon className="h-3 w-3 flex-shrink-0" />
-              </div>
-            </div>
-            
-            {/* Gmail Connected */}
-            <div className="connected flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm">
-              <GmailIcon className="h-4 w-4 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <span className="font-medium block text-xs">Gmail</span>
-                <span className="text-[10px] text-muted-foreground truncate block">
-                  {session.user?.email}
-                </span>
-              </div>
-              <CheckIcon className="h-3 w-3 flex-shrink-0" />
-            </div>
-            
-            {/* Actions */}
-            <div className="flex gap-1 px-1">
+        {/* Integration Icons */}
+        <div className="px-3 space-y-2">
+          <button
+            onClick={handleConnectGoogle}
+            disabled={status === "loading"}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs smooth ${
+              session 
+                ? "bg-green-500/10 border border-green-500/20 text-green-700" 
+                : "border border-dashed hover:border-primary/50 hover:bg-primary/5 text-muted-foreground"
+            }`}
+            title={session ? "Google Calendar Connected" : "Connect Google Calendar"}
+          >
+            <GoogleCalendarIcon className="h-4 w-4 flex-shrink-0" />
+            <span className="font-medium">Calendar</span>
+            {session && <CheckIcon className="h-3 w-3 ml-auto" />}
+          </button>
+          
+          <button
+            onClick={handleConnectGoogle}
+            disabled={status === "loading"}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs smooth ${
+              session 
+                ? "bg-green-500/10 border border-green-500/20 text-green-700" 
+                : "border border-dashed hover:border-primary/50 hover:bg-primary/5 text-muted-foreground"
+            }`}
+            title={session ? "Gmail Connected" : "Connect Gmail"}
+          >
+            <GmailIcon className="h-4 w-4 flex-shrink-0" />
+            <span className="font-medium">Gmail</span>
+            {session && <CheckIcon className="h-3 w-3 ml-auto" />}
+          </button>
+          
+          <button
+            onClick={handleConnectGoogle}
+            disabled={status === "loading"}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs smooth ${
+              session 
+                ? "bg-green-500/10 border border-green-500/20 text-green-700" 
+                : "border border-dashed hover:border-primary/50 hover:bg-primary/5 text-muted-foreground"
+            }`}
+            title={session ? "Google Drive Connected" : "Connect Google Drive"}
+          >
+            <GoogleDriveIcon className="h-4 w-4 flex-shrink-0" />
+            <span className="font-medium">Drive</span>
+            {session && <CheckIcon className="h-3 w-3 ml-auto" />}
+          </button>
+        </div>
+        
+        {/* Sync Actions */}
+        {session && (
+          <div className="mt-3 px-3">
+            <div className="flex gap-1">
               <button 
                 onClick={handleSync}
                 disabled={isSyncing}
-                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground smooth rounded hover:bg-secondary/50"
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground smooth rounded-lg border hover:bg-secondary/50"
               >
                 <RefreshIcon className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? 'Syncing...' : 'Sync'}
+                {isSyncing ? 'Syncing...' : 'Sync All'}
               </button>
               <button 
                 onClick={handleDisconnect}
-                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground smooth rounded hover:bg-secondary/50"
+                className="flex items-center justify-center px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground smooth rounded-lg border hover:bg-secondary/50"
+                title="Disconnect Google"
               >
                 <LogOutIcon className="h-3 w-3" />
-                Disconnect
               </button>
             </div>
           </div>
-        ) : (
-          <button 
-            onClick={handleConnectGoogle}
-            disabled={status === "loading"}
-            className="flex w-full items-center gap-2.5 rounded-lg border border-dashed px-3 py-2.5 text-left text-sm text-muted-foreground hover:border-primary/50 hover:bg-primary/5 smooth"
-          >
-            <GoogleCalendarIcon className="h-4 w-4" />
-            <span>{status === "loading" ? "Loading..." : "Connect Google"}</span>
-          </button>
         )}
       </nav>
 

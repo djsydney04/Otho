@@ -38,7 +38,7 @@ export default function CRMPage() {
   
   const [search, setSearch] = useState("")
   const [stageFilter, setStageFilter] = useState<Stage | "all">("all")
-  
+
   // Initialize store on mount
   useEffect(() => {
     initialize()
@@ -68,17 +68,7 @@ export default function CRMPage() {
         createdAt: company.created_at,
         updatedAt: company.updated_at,
       },
-      founder: company.founder ? {
-        id: company.founder.id,
-        name: company.founder.name,
-        email: company.founder.email,
-        linkedin: company.founder.linkedin,
-        twitter: company.founder.twitter,
-        location: company.founder.location,
-        currentRole: company.founder.role_title,
-        notes: company.founder.notes,
-        createdAt: company.founder.created_at,
-      } : undefined,
+      founder: company.founder || undefined,
       owner: company.owner ? {
         name: company.owner.name,
         email: company.owner.email,
@@ -134,31 +124,31 @@ export default function CRMPage() {
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
+            <Input
                     placeholder="Search companies..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
                     className="w-64 pl-9"
-                  />
-                </div>
+            />
+          </div>
 
-                <Select
-                  value={stageFilter}
-                  onValueChange={(v) => setStageFilter(v as Stage | "all")}
-                >
+          <Select
+            value={stageFilter}
+            onValueChange={(v) => setStageFilter(v as Stage | "all")}
+          >
                   <SelectTrigger className="w-36">
                     <SelectValue placeholder="All stages" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All stages</SelectItem>
-                    {STAGES.map((stage) => (
-                      <SelectItem key={stage} value={stage}>
-                        {stage}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All stages</SelectItem>
+              {STAGES.map((stage) => (
+                <SelectItem key={stage} value={stage}>
+                  {stage}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
                 <span className="text-sm text-muted-foreground">
                   {loading ? "Loading..." : `${filtered.length} companies`}
                 </span>
@@ -174,8 +164,8 @@ export default function CRMPage() {
                     <GridIcon className="h-3.5 w-3.5" />
                     Board
                   </TabsTrigger>
-                </TabsList>
-                
+              </TabsList>
+
                 <div className="h-6 w-px bg-border" />
                 
                 <Button variant="outline" size="sm">
