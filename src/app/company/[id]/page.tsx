@@ -26,6 +26,7 @@ import {
 
 import { useAppStore, syncCalendar, syncEmails, fetchCompanyWithRelations, STAGES, STAGE_CLASSES, formatRelative, type Stage, type CompanyWithRelations } from "@/lib/store"
 import type { CalendarEvent, EmailThread } from "@/lib/supabase/types"
+import { AccountChat } from "@/components/otho/account-chat"
 
 // Types for Drive
 interface DriveFile {
@@ -505,7 +506,7 @@ export default function CompanyDetailPage() {
               <ArrowLeftIcon className="h-4 w-4 text-muted-foreground" />
             </button>
             <div className="h-6 w-px bg-border" />
-            <Link href="/" className="text-sm text-muted-foreground hover:text-foreground smooth">
+            <Link href="/pipeline" className="text-sm text-muted-foreground hover:text-foreground smooth">
               Pipeline
             </Link>
             <span className="text-muted-foreground">/</span>
@@ -548,6 +549,28 @@ export default function CompanyDetailPage() {
                   </Badge>
                 ))}
               </div>
+              
+              {/* Custom Fields */}
+              {(company as any).custom_fields?.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+                  {(company as any).custom_fields.map((field: any) => (
+                    <div key={field.id} className="text-sm">
+                      <span className="text-muted-foreground">{field.field_name}:</span>{" "}
+                      {field.field_type === 'url' ? (
+                        <a href={field.field_value} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                          {field.field_value?.replace(/^https?:\/\//, '').slice(0, 30)}
+                        </a>
+                      ) : field.field_type === 'email' ? (
+                        <a href={`mailto:${field.field_value}`} className="text-primary hover:underline">
+                          {field.field_value}
+                        </a>
+                      ) : (
+                        <span className="font-medium">{field.field_value}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           
@@ -1120,6 +1143,9 @@ export default function CompanyDetailPage() {
                 )}
               </CardContent>
             </Card>
+            
+            {/* Otho Chat */}
+            <AccountChat companyId={company.id} contextName={company.name} />
             
             {/* Owner */}
             <Card className="elevated">

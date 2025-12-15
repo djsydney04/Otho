@@ -17,7 +17,8 @@ export async function GET(
       comments:founder_comments(*, author:users(*)),
       calendar_events(*),
       email_threads(*),
-      drive_documents(*)
+      drive_documents(*),
+      custom_fields:founder_custom_fields(*)
     `)
     .eq("id", id)
     .single()

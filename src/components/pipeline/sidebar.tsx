@@ -3,14 +3,12 @@
 import { useSession, signIn, signOut } from "next-auth/react"
 import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useAppStore, syncCalendar, syncEmails, formatRelative } from "@/lib/store"
+import { useAppStore, syncCalendar, syncEmails } from "@/lib/store"
 import {
+  HomeIcon,
+  OthoIcon,
   LayoutIcon,
-  BuildingIcon,
   UsersIcon,
-  CheckSquareIcon,
-  FileTextIcon,
-  InboxIcon,
   GoogleCalendarIcon,
   GmailIcon,
   CheckIcon,
@@ -43,21 +41,16 @@ function SidebarItem({ label, icon, active, href }: SidebarItemProps) {
     )
   }
 
-  return (
-    <button className={className}>
-      {icon}
-      {label}
-    </button>
-  )
+  return null // Don't render items without href
 }
 
 interface SidebarProps {
-  activePage?: "pipeline" | "companies" | "founders" | "tasks" | "comments" | "inbox"
+  activePage?: "home" | "otho" | "pipeline" | "founders"
 }
 
-export function Sidebar({ activePage = "pipeline" }: SidebarProps) {
+export function Sidebar({ activePage = "home" }: SidebarProps) {
   const { data: session, status } = useSession()
-  const { lastSyncTime, syncing, emailSyncing, clearCalendarData, clearEmailData } = useAppStore()
+  const { syncing, emailSyncing, clearCalendarData, clearEmailData } = useAppStore()
 
   const handleConnectGoogle = () => {
     signIn("google")
@@ -70,59 +63,49 @@ export function Sidebar({ activePage = "pipeline" }: SidebarProps) {
   }
 
   const handleSync = async () => {
-    // Sync both calendar and email
     await Promise.all([syncCalendar(), syncEmails()])
   }
   
   const isSyncing = syncing || emailSyncing
 
   return (
-    <aside className="flex w-60 flex-col border-r bg-sidebar">
+    <aside className="flex w-60 flex-col border-r bg-sidebar flex-shrink-0">
       <div className="flex h-16 items-center border-b px-5">
         <Link href="/" className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-semibold">
-            A
+            O
           </div>
           <span className="font-display text-lg font-semibold tracking-tight">
-            Angel Lead
+            Otho
           </span>
         </Link>
       </div>
 
-      <nav className="flex-1 px-3 py-4">
+      <nav className="flex-1 px-3 py-4 overflow-y-auto">
         <div className="space-y-0.5">
+          <SidebarItem 
+            label="Home" 
+            icon={<HomeIcon className="h-4 w-4" />} 
+            active={activePage === "home"}
+            href="/"
+          />
+          <SidebarItem 
+            label="Otho" 
+            icon={<OthoIcon className="h-4 w-4" />} 
+            active={activePage === "otho"}
+            href="/otho"
+          />
           <SidebarItem 
             label="Pipeline" 
             icon={<LayoutIcon className="h-4 w-4" />} 
             active={activePage === "pipeline"}
-            href="/"
-          />
-          <SidebarItem 
-            label="Companies" 
-            icon={<BuildingIcon className="h-4 w-4" />}
-            active={activePage === "companies"}
+            href="/pipeline"
           />
           <SidebarItem 
             label="Founders" 
             icon={<UsersIcon className="h-4 w-4" />}
             active={activePage === "founders"}
             href="/founders"
-          />
-          <SidebarItem 
-            label="Tasks" 
-            icon={<CheckSquareIcon className="h-4 w-4" />}
-            active={activePage === "tasks"}
-          />
-          <SidebarItem 
-            label="Comments" 
-            icon={<FileTextIcon className="h-4 w-4" />}
-            active={activePage === "comments"}
-          />
-          <SidebarItem 
-            label="Inbox" 
-            icon={<InboxIcon className="h-4 w-4" />}
-            active={activePage === "inbox"}
-            href="/inbox"
           />
         </div>
         
@@ -204,10 +187,10 @@ export function Sidebar({ activePage = "pipeline" }: SidebarProps) {
         )}
       </nav>
 
-      <div className="border-t p-3">
+      <div className="border-t p-3 flex-shrink-0">
         {session ? (
           <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
-            <Avatar className="h-8 w-8 border">
+            <Avatar className="h-8 w-8 border flex-shrink-0">
               <AvatarImage src={session.user?.image || undefined} />
               <AvatarFallback className="bg-secondary text-xs font-medium">
                 {session.user?.name?.split(' ').map(n => n[0]).join('') || '?'}
@@ -224,7 +207,7 @@ export function Sidebar({ activePage = "pipeline" }: SidebarProps) {
           </div>
         ) : (
           <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
-            <Avatar className="h-8 w-8 border">
+            <Avatar className="h-8 w-8 border flex-shrink-0">
               <AvatarFallback className="bg-secondary text-xs font-medium">
                 ?
               </AvatarFallback>
