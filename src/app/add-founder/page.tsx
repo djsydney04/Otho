@@ -17,11 +17,9 @@ import {
 } from "@/components/ui/dialog"
 import { Sidebar } from "@/components/pipeline/sidebar"
 import { ArrowLeftIcon } from "@/components/pipeline/icons"
-import { useAppStore } from "@/lib/store"
 
 export default function AddFounderPage() {
   const router = useRouter()
-  const { addFounder } = useAppStore()
   
   const [formData, setFormData] = useState({
     name: "",
@@ -50,7 +48,8 @@ export default function AddFounderPage() {
   }>>([])
   const [showAddField, setShowAddField] = useState(false)
   const [newFieldName, setNewFieldName] = useState("")
-  const [newFieldType, setNewFieldType] = useState<'text' | 'url' | 'email' | 'date'>('text')
+  type CustomFieldType = 'text' | 'url' | 'email' | 'date'
+  const [newFieldType, setNewFieldType] = useState<CustomFieldType>('text')
   
   const addCustomField = () => {
     if (!newFieldName.trim()) return
@@ -388,7 +387,7 @@ export default function AddFounderPage() {
                   />
                   <select
                     value={newFieldType}
-                    onChange={(e) => setNewFieldType(e.target.value as any)}
+                    onChange={(e) => setNewFieldType(e.target.value as CustomFieldType)}
                     className="h-9 px-3 rounded-md border bg-background text-sm"
                   >
                     <option value="text">Text</option>

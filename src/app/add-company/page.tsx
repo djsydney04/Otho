@@ -15,9 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 import { Sidebar } from "@/components/pipeline/sidebar"
-import { ArrowLeftIcon, SearchIcon, CheckIcon } from "@/components/pipeline/icons"
+import { ArrowLeftIcon, SearchIcon } from "@/components/pipeline/icons"
 import { useAppStore, STAGES, type Stage, type Founder } from "@/lib/store"
 
 function AddCompanyForm() {
@@ -112,7 +111,16 @@ function AddCompanyForm() {
     setSaving(true)
     
     try {
-      const companyData: any = {
+      const companyData: {
+        name: string
+        description: string
+        website: string
+        stage: Stage
+        tags: string[]
+        founder_id?: string
+        founder_name?: string
+        founder_email?: string
+      } = {
         name: formData.name,
         description: formData.description,
         website: formData.website,
