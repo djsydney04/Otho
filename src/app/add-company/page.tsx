@@ -179,13 +179,13 @@ function AddCompanyForm() {
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
-      <Sidebar />
+      <Sidebar activePage="pipeline" />
       
       <main className="flex flex-1 flex-col">
         {/* Header */}
         <header className="flex items-center gap-4 border-b px-8 py-5">
           <Link
-            href="/"
+            href="/pipeline"
             className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary smooth"
           >
             <ArrowLeftIcon className="h-4 w-4" />
@@ -522,7 +522,7 @@ function AddCompanyForm() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push("/")}
+                onClick={() => router.push("/pipeline")}
                 className="px-6"
               >
                 Cancel

@@ -1,5 +1,25 @@
 // Pipeline icons - all SVG icons used in the pipeline UI
 
+export function HomeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M3 9.5L12 3l9 6.5V21a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1V9.5z" />
+    </svg>
+  )
+}
+
+export function OthoIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="4" />
+      <line x1="21.17" y1="8" x2="12" y2="8" />
+      <line x1="3.95" y1="6.06" x2="8.54" y2="14" />
+      <line x1="10.88" y1="21.94" x2="15.46" y2="14" />
+    </svg>
+  )
+}
+
 export function CalendarIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -225,4 +245,3 @@ export function FolderIcon({ className }: { className?: string }) {
     </svg>
   )
 }
-

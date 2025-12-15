@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { formatRelative, syncCalendar, syncEmails, useAppStore } from "@/lib/store"
 import type { FounderWithRelations, Company, FounderComment, CalendarEvent, EmailThread } from "@/lib/supabase/types"
+import { AccountChat } from "@/components/otho/account-chat"
 
 // Types for Drive
 interface DriveFile {
@@ -516,6 +517,28 @@ export default function FounderDetailPage() {
                 </span>
               )}
             </div>
+            
+            {/* Custom Fields */}
+            {(founder as any).custom_fields?.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+                {(founder as any).custom_fields.map((field: any) => (
+                  <div key={field.id} className="text-sm">
+                    <span className="text-muted-foreground">{field.field_name}:</span>{" "}
+                    {field.field_type === 'url' ? (
+                      <a href={field.field_value} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                        {field.field_value?.replace(/^https?:\/\//, '').slice(0, 30)}
+                      </a>
+                    ) : field.field_type === 'email' ? (
+                      <a href={`mailto:${field.field_value}`} className="text-primary hover:underline">
+                        {field.field_value}
+                      </a>
+                    ) : (
+                      <span className="font-medium">{field.field_value}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           
           <div className="flex gap-2">
@@ -977,6 +1000,9 @@ export default function FounderDetailPage() {
                 )}
               </CardContent>
             </Card>
+            
+            {/* Otho Chat */}
+            <AccountChat founderId={founder.id} contextName={founder.name} />
             
             {/* Timeline */}
             <Card className="elevated">
