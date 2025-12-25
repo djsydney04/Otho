@@ -1,19 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { createServerClient } from "@/lib/supabase/client"
 import { getDriveFile } from "@/lib/integrations/google/drive"
+import { requireGoogleAccessToken } from "@/lib/integrations/google/credentials"
+import { getAuthenticatedUser } from "@/lib/clerk"
 
 // POST /api/drive/attach - Attach a Google Drive file to a company or founder
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    
-    if (!session?.accessToken) {
-      return NextResponse.json(
-        { error: "Not authenticated with Google" },
-        { status: 401 }
-      )
+    const credentials = await requireGoogleAccessToken()
+    if (credentials.error) {
+      return NextResponse.json({ error: credentials.error }, { status: 401 })
     }
     
     const supabase = createServerClient()
@@ -35,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Get file details from Google Drive
-    const file = await getDriveFile(session.accessToken, fileId)
+    const file = await getDriveFile(credentials.accessToken, fileId)
     
     if (!file) {
       return NextResponse.json(
@@ -61,13 +57,15 @@ export async function POST(request: NextRequest) {
     
     // Get user ID from session
     let userId: string | null = null
-    if (session?.user?.email) {
+    const clerkUser = await getAuthenticatedUser()
+    const primaryEmail = clerkUser?.emailAddresses?.[0]?.emailAddress
+    if (primaryEmail) {
       const { data: user } = await supabase
         .from("users")
         .select("id")
-        .eq("email", session.user.email)
+        .eq("email", primaryEmail)
         .single()
-      
+
       if (user) {
         userId = user.id
       }
@@ -145,4 +143,3 @@ export async function DELETE(request: NextRequest) {
     )
   }
 }
-

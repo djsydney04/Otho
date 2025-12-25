@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
-import { useSession } from "next-auth/react"
+import { useUser } from "@clerk/nextjs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -24,7 +24,7 @@ interface Email {
 }
 
 export default function InboxPage() {
-  const { data: session } = useSession()
+  const { user } = useUser()
   const { emailSyncing, lastEmailSyncTime, companies } = useAppStore()
   const [search, setSearch] = useState("")
   const [emails, setEmails] = useState<Email[]>([])
@@ -32,7 +32,7 @@ export default function InboxPage() {
   
   // Fetch emails from API
   const fetchEmails = async () => {
-    if (!session) return
+    if (!user) return
     setLoading(true)
     try {
       const response = await fetch('/api/gmail/messages?matchFounders=true')
@@ -59,10 +59,10 @@ export default function InboxPage() {
   
   // Fetch on mount if connected
   useEffect(() => {
-    if (session?.accessToken) {
+    if (user) {
       fetchEmails()
     }
-  }, [session?.accessToken, companies])
+  }, [user, companies])
   
   // Filter emails
   const filteredEmails = useMemo(() => {
@@ -108,7 +108,7 @@ export default function InboxPage() {
         
         {/* Content */}
         <section className="flex-1 overflow-y-auto px-8 py-6">
-          {!session ? (
+          {!user ? (
             <Card className="elevated">
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <div className="text-center max-w-md">

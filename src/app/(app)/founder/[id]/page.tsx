@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { useSession } from "next-auth/react"
+import { useUser } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -285,7 +285,7 @@ export default function FounderDetailPage() {
   const params = useParams()
   const router = useRouter()
   const founderId = params.id as string
-  const { data: session } = useSession()
+  const { user } = useUser()
   const { syncing, emailSyncing } = useAppStore()
   
   const [founder, setFounder] = useState<FounderWithRelations | null>(null)
@@ -324,7 +324,7 @@ export default function FounderDetailPage() {
   
   // Search Drive files
   const searchDriveFiles = async (query?: string) => {
-    if (!session?.accessToken) return
+    if (!user) return
     setLoadingDrive(true)
     try {
       const url = query 
@@ -370,10 +370,10 @@ export default function FounderDetailPage() {
   
   // Load Drive files when dialog opens
   useEffect(() => {
-    if (driveDialogOpen && session?.accessToken) {
+    if (driveDialogOpen && user) {
       searchDriveFiles()
     }
-  }, [driveDialogOpen, session?.accessToken])
+  }, [driveDialogOpen, user])
   
   const handleAddComment = async () => {
     if (!newComment.trim()) return
@@ -715,7 +715,7 @@ export default function FounderDetailPage() {
               <div className="flex gap-3">
                 <Avatar className="h-8 w-8 border">
                   <AvatarFallback className="bg-secondary text-xs font-medium">
-                    {session?.user?.name?.split(' ').map(n => n[0]).join('') || '?'}
+                    {user?.fullName?.split(" ").map(n => n[0]).join("") || "?"}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 flex gap-2">
@@ -878,7 +878,7 @@ export default function FounderDetailPage() {
                       <button 
                         className="p-1 rounded hover:bg-secondary smooth"
                         title="Attach file"
-                        disabled={!session}
+                        disabled={!user}
                       >
                         <PlusIcon className="h-4 w-4 text-muted-foreground" />
                       </button>
@@ -926,7 +926,7 @@ export default function FounderDetailPage() {
                             ))
                           ) : (
                             <p className="py-8 text-center text-sm text-muted-foreground">
-                              {session ? "No files found" : "Connect Google to see files"}
+                              {user ? "No files found" : "Connect Google to see files"}
                             </p>
                           )}
                         </div>
@@ -1004,4 +1004,3 @@ export default function FounderDetailPage() {
     </div>
   )
 }
-

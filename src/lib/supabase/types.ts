@@ -144,6 +144,7 @@ export type Database = {
           stage: Database["public"]["Enums"]["stage"]
           updated_at: string
           website: string | null
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -164,6 +165,7 @@ export type Database = {
           stage?: Database["public"]["Enums"]["stage"]
           updated_at?: string
           website?: string | null
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -184,6 +186,7 @@ export type Database = {
           stage?: Database["public"]["Enums"]["stage"]
           updated_at?: string
           website?: string | null
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -201,6 +204,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      contacts: {
+        Row: {
+          created_at: string
+          id: string
+          name: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
       }
       company_custom_fields: {
         Row: {
@@ -640,6 +664,189 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      onboarding: {
+        Row: {
+          ai_help: Json | null
+          ai_tone: string | null
+          biggest_pain: string | null
+          check_size: string | null
+          clerk_user_id: string
+          core_sectors: Json | null
+          created_at: string
+          daily_digest: boolean | null
+          deal_sourcing: Json | null
+          decision_factors: Json | null
+          decision_speed: string | null
+          discover_topics: Json | null
+          frontier_interests: Json | null
+          fund_contact_email: string | null
+          fund_contact_notes: string | null
+          geography: Json | null
+          integrations: Json | null
+          investor_type: string | null
+          monthly_ai_credits: number | null
+          monthly_enrichment_credits: number | null
+          selected_plan: "hobby" | "angel" | "fund" | null
+          stage_focus: Json | null
+          status: string | null
+          strategy: Json | null
+          workspace_id: string | null
+          years_investing: string | null
+        }
+        Insert: {
+          ai_help?: Json | null
+          ai_tone?: string | null
+          biggest_pain?: string | null
+          check_size?: string | null
+          clerk_user_id: string
+          core_sectors?: Json | null
+          created_at?: string
+          daily_digest?: boolean | null
+          deal_sourcing?: Json | null
+          decision_factors?: Json | null
+          decision_speed?: string | null
+          discover_topics?: Json | null
+          frontier_interests?: Json | null
+          fund_contact_email?: string | null
+          fund_contact_notes?: string | null
+          geography?: Json | null
+          integrations?: Json | null
+          investor_type?: string | null
+          monthly_ai_credits?: number | null
+          monthly_enrichment_credits?: number | null
+          selected_plan?: "hobby" | "angel" | "fund" | null
+          stage_focus?: Json | null
+          status?: string | null
+          strategy?: Json | null
+          workspace_id?: string | null
+          years_investing?: string | null
+        }
+        Update: {
+          ai_help?: Json | null
+          ai_tone?: string | null
+          biggest_pain?: string | null
+          check_size?: string | null
+          clerk_user_id?: string
+          core_sectors?: Json | null
+          created_at?: string
+          daily_digest?: boolean | null
+          deal_sourcing?: Json | null
+          decision_factors?: Json | null
+          decision_speed?: string | null
+          discover_topics?: Json | null
+          frontier_interests?: Json | null
+          fund_contact_email?: string | null
+          fund_contact_notes?: string | null
+          geography?: Json | null
+          integrations?: Json | null
+          investor_type?: string | null
+          monthly_ai_credits?: number | null
+          monthly_enrichment_credits?: number | null
+          selected_plan?: "hobby" | "angel" | "fund" | null
+          stage_focus?: Json | null
+          status?: string | null
+          strategy?: Json | null
+          workspace_id?: string | null
+          years_investing?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          clerk_user_id: string
+          created_at: string
+          default_workspace_id: string | null
+        }
+        Insert: {
+          clerk_user_id: string
+          created_at?: string
+          default_workspace_id?: string | null
+        }
+        Update: {
+          clerk_user_id?: string
+          created_at?: string
+          default_workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      usage_monthly: {
+        Row: {
+          ai_credits_used: number
+          enrichment_used: number
+          id: string
+          month: string
+          workspace_id: string
+        }
+        Insert: {
+          ai_credits_used?: number
+          enrichment_used?: number
+          id?: string
+          month: string
+          workspace_id: string
+        }
+        Update: {
+          ai_credits_used?: number
+          enrichment_used?: number
+          id?: string
+          month?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      workspaces: {
+        Row: {
+          created_at: string
+          fund_enabled: boolean
+          id: string
+          name: string
+          owner_clerk_user_id: string
+          plan: "hobby" | "angel" | "fund"
+          workspace_type: string | null
+        }
+        Insert: {
+          created_at?: string
+          fund_enabled?: boolean
+          id?: string
+          name: string
+          owner_clerk_user_id: string
+          plan: "hobby" | "angel" | "fund"
+          workspace_type?: string | null
+        }
+        Update: {
+          created_at?: string
+          fund_enabled?: boolean
+          id?: string
+          name?: string
+          owner_clerk_user_id?: string
+          plan?: "hobby" | "angel" | "fund"
+          workspace_type?: string | null
+        }
+        Relationships: []
+      }
+      workspace_members: {
+        Row: {
+          clerk_user_id: string
+          created_at: string
+          id: string
+          role: string
+          workspace_id: string
+        }
+        Insert: {
+          clerk_user_id: string
+          created_at?: string
+          id?: string
+          role: string
+          workspace_id: string
+        }
+        Update: {
+          clerk_user_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          workspace_id?: string
+        }
+        Relationships: []
       }
       tags: {
         Row: {

@@ -1,8 +1,12 @@
-import { redirect } from "next/navigation"
 import { auth } from "@clerk/nextjs/server"
+import { redirect } from "next/navigation"
 import { getOnboardingStatus } from "@/lib/data/onboarding"
 
-export default async function HomePage() {
+export default async function OnboardingLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const { userId } = auth()
 
   if (!userId) {
@@ -15,5 +19,5 @@ export default async function HomePage() {
     redirect("/pipeline")
   }
 
-  redirect("/onboarding")
+  return <>{children}</>
 }

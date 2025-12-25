@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { useSession, signIn } from "next-auth/react"
+import { useUser } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -313,7 +313,7 @@ export default function CompanyDetailPage() {
   const params = useParams()
   const router = useRouter()
   const companyId = params.id as string
-  const { data: session } = useSession()
+  const { user } = useUser()
   
   const { lastSyncTime, syncing, emailSyncing, updateCompanyStage, addComment } = useAppStore()
   
@@ -356,7 +356,7 @@ export default function CompanyDetailPage() {
   
   // Search Drive files
   const searchDriveFiles = async (query?: string) => {
-    if (!session?.accessToken) return
+    if (!user) return
     setLoadingDrive(true)
     try {
       const url = query 
@@ -402,10 +402,10 @@ export default function CompanyDetailPage() {
   
   // Load Drive files when dialog opens
   useEffect(() => {
-    if (driveDialogOpen && session?.accessToken) {
+    if (driveDialogOpen && user) {
       searchDriveFiles()
     }
-  }, [driveDialogOpen, session?.accessToken])
+  }, [driveDialogOpen, user])
   
   const toggleFlag = async (flag: 'needs_followup' | 'needs_diligence' | 'is_priority') => {
     if (!company) return
@@ -882,7 +882,7 @@ export default function CompanyDetailPage() {
                 <div className="flex gap-3">
                   <Avatar className="h-8 w-8 border">
                     <AvatarFallback className="bg-secondary text-xs font-medium">
-                      {session?.user?.name?.split(' ').map(n => n[0]).join('') || '?'}
+                      {user?.fullName?.split(" ").map(n => n[0]).join("") || "?"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 flex gap-2">
@@ -969,7 +969,7 @@ export default function CompanyDetailPage() {
                   <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
                     Google Calendar
                   </CardTitle>
-                  {session && (
+                  {user && (
                     <div className="flex items-center gap-2">
                       <div className="sync-indicator" />
                       <span className="text-xs text-muted-foreground">Connected</span>
@@ -978,12 +978,14 @@ export default function CompanyDetailPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {session ? (
+                {user ? (
                   <div className="flex items-center justify-between rounded-lg bg-secondary/50 px-3 py-2">
                     <div className="flex items-center gap-2">
                       <GoogleCalendarIcon className="h-5 w-5" />
                       <div>
-                        <p className="text-sm font-medium">{session.user?.email}</p>
+                        <p className="text-sm font-medium">
+                          {user?.primaryEmailAddress?.emailAddress ?? "Connected"}
+                        </p>
                         {lastSyncTime && (
                           <p className="text-xs text-muted-foreground">
                             Synced {formatRelative(lastSyncTime.toISOString())}
@@ -1001,7 +1003,16 @@ export default function CompanyDetailPage() {
                     </Button>
                   </div>
                 ) : (
-                  <Button variant="outline" className="w-full" onClick={() => signIn("google")}>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() =>
+                      window.open(
+                        "mailto:hello@angellead.com?subject=Connect%20Google%20Calendar",
+                        "_blank",
+                      )
+                    }
+                  >
                     <GoogleCalendarIcon className="h-4 w-4 mr-2" />
                     Connect Calendar
                   </Button>
@@ -1021,7 +1032,7 @@ export default function CompanyDetailPage() {
                       <button 
                         className="p-1 rounded hover:bg-secondary smooth"
                         title="Attach file"
-                        disabled={!session}
+                        disabled={!user}
                       >
                         <PlusIcon className="h-4 w-4 text-muted-foreground" />
                       </button>
@@ -1069,7 +1080,7 @@ export default function CompanyDetailPage() {
                             ))
                           ) : (
                             <p className="py-8 text-center text-sm text-muted-foreground">
-                              {session ? "No files found" : "Connect Google to see files"}
+                              {user ? "No files found" : "Connect Google to see files"}
                             </p>
                           )}
                         </div>

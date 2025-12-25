@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { listEvents, matchEventsWithFounders } from "@/lib/integrations/google/calendar"
 import { MOCK_FOUNDERS } from "@/lib/mocks/pipeline"
+import { requireGoogleAccessToken } from "@/lib/integrations/google/credentials"
 
 // GET /api/calendar/events - List calendar events
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.accessToken) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
+    const credentials = await requireGoogleAccessToken()
+    if (credentials.error) {
+      return NextResponse.json({ error: credentials.error }, { status: 401 })
     }
 
     const searchParams = request.nextUrl.searchParams
@@ -23,7 +18,7 @@ export async function GET(request: NextRequest) {
     const matchFounders = searchParams.get("matchFounders") === "true"
 
     // Get events from Google Calendar
-    const events = await listEvents(session.accessToken, {
+    const events = await listEvents(credentials.accessToken, {
       timeMin,
       timeMax,
       maxResults: 100,
@@ -53,4 +48,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-
