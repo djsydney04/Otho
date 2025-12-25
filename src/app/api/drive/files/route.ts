@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { listDriveFiles, searchDriveFiles, getRecentDriveFiles, getStarredDriveFiles } from "@/lib/integrations/google/drive"
+import { requireGoogleAccessToken } from "@/lib/integrations/google/credentials"
 
 // GET /api/drive/files - List Google Drive files
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    
-    if (!session?.accessToken) {
-      return NextResponse.json(
-        { error: "Not authenticated with Google" },
-        { status: 401 }
-      )
+    const credentials = await requireGoogleAccessToken()
+    if (credentials.error) {
+      return NextResponse.json({ error: credentials.error }, { status: 401 })
     }
     
     const { searchParams } = new URL(request.url)
@@ -26,17 +21,17 @@ export async function GET(request: NextRequest) {
     
     if (query) {
       // Search for files
-      const files = await searchDriveFiles(session.accessToken, query, pageSize)
+      const files = await searchDriveFiles(credentials.accessToken, query, pageSize)
       result = { files, nextPageToken: undefined }
     } else if (type === "recent") {
-      const files = await getRecentDriveFiles(session.accessToken, pageSize)
+      const files = await getRecentDriveFiles(credentials.accessToken, pageSize)
       result = { files, nextPageToken: undefined }
     } else if (type === "starred") {
-      const files = await getStarredDriveFiles(session.accessToken, pageSize)
+      const files = await getStarredDriveFiles(credentials.accessToken, pageSize)
       result = { files, nextPageToken: undefined }
     } else {
       // List all files
-      result = await listDriveFiles(session.accessToken, {
+      result = await listDriveFiles(credentials.accessToken, {
         pageSize,
         pageToken,
         folderId,
@@ -52,4 +47,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-

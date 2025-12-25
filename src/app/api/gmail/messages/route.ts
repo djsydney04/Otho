@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { fetchEmails, matchEmailsWithFounders } from "@/lib/integrations/google/gmail"
 import { MOCK_FOUNDERS } from "@/lib/mocks/pipeline"
+import { requireGoogleAccessToken } from "@/lib/integrations/google/credentials"
 
 // GET /api/gmail/messages - Fetch emails
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.accessToken) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
+    const credentials = await requireGoogleAccessToken()
+    if (credentials.error) {
+      return NextResponse.json({ error: credentials.error }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -21,7 +16,7 @@ export async function GET(request: NextRequest) {
     const q = searchParams.get("q") || undefined
     const matchFounders = searchParams.get("matchFounders") === "true"
 
-    const emails = await fetchEmails(session.accessToken, {
+    const emails = await fetchEmails(credentials.accessToken, {
       maxResults,
       q,
     })
@@ -48,4 +43,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-

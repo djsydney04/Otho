@@ -1,6 +1,6 @@
 "use client"
 
-import { useSession, signIn, signOut } from "next-auth/react"
+import { useClerk, useUser } from "@clerk/nextjs"
 import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAppStore, syncCalendar, syncEmails, formatRelative } from "@/lib/store"
@@ -56,17 +56,18 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activePage = "pipeline" }: SidebarProps) {
-  const { data: session, status } = useSession()
+  const { user } = useUser()
+  const { signOut } = useClerk()
   const { lastSyncTime, syncing, emailSyncing, clearCalendarData, clearEmailData } = useAppStore()
 
   const handleConnectGoogle = () => {
-    signIn("google")
+    window.open("mailto:hello@angellead.com?subject=Connect%20Google%20Workspace", "_blank")
   }
 
   const handleDisconnect = () => {
     clearCalendarData()
     clearEmailData()
-    signOut({ redirect: false })
+    signOut({ redirectUrl: "/sign-in" })
   }
 
   const handleSync = async () => {
@@ -95,7 +96,7 @@ export function Sidebar({ activePage = "pipeline" }: SidebarProps) {
             label="Pipeline" 
             icon={<LayoutIcon className="h-4 w-4" />} 
             active={activePage === "pipeline"}
-            href="/"
+            href="/pipeline"
           />
           <SidebarItem 
             label="Companies" 
@@ -136,52 +137,52 @@ export function Sidebar({ activePage = "pipeline" }: SidebarProps) {
         <div className="px-3 space-y-2">
           <button
             onClick={handleConnectGoogle}
-            disabled={status === "loading"}
+            disabled={!user}
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs smooth ${
-              session 
+              user
                 ? "bg-green-500/10 border border-green-500/20 text-green-700" 
                 : "border border-dashed hover:border-primary/50 hover:bg-primary/5 text-muted-foreground"
             }`}
-            title={session ? "Google Calendar Connected" : "Connect Google Calendar"}
+            title={user ? "Google Calendar Connected" : "Connect Google Calendar"}
           >
             <GoogleCalendarIcon className="h-4 w-4 flex-shrink-0" />
             <span className="font-medium">Calendar</span>
-            {session && <CheckIcon className="h-3 w-3 ml-auto" />}
+            {user && <CheckIcon className="h-3 w-3 ml-auto" />}
           </button>
           
           <button
             onClick={handleConnectGoogle}
-            disabled={status === "loading"}
+            disabled={!user}
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs smooth ${
-              session 
+              user
                 ? "bg-green-500/10 border border-green-500/20 text-green-700" 
                 : "border border-dashed hover:border-primary/50 hover:bg-primary/5 text-muted-foreground"
             }`}
-            title={session ? "Gmail Connected" : "Connect Gmail"}
+            title={user ? "Gmail Connected" : "Connect Gmail"}
           >
             <GmailIcon className="h-4 w-4 flex-shrink-0" />
             <span className="font-medium">Gmail</span>
-            {session && <CheckIcon className="h-3 w-3 ml-auto" />}
+            {user && <CheckIcon className="h-3 w-3 ml-auto" />}
           </button>
           
           <button
             onClick={handleConnectGoogle}
-            disabled={status === "loading"}
+            disabled={!user}
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs smooth ${
-              session 
+              user
                 ? "bg-green-500/10 border border-green-500/20 text-green-700" 
                 : "border border-dashed hover:border-primary/50 hover:bg-primary/5 text-muted-foreground"
             }`}
-            title={session ? "Google Drive Connected" : "Connect Google Drive"}
+            title={user ? "Google Drive Connected" : "Connect Google Drive"}
           >
             <GoogleDriveIcon className="h-4 w-4 flex-shrink-0" />
             <span className="font-medium">Drive</span>
-            {session && <CheckIcon className="h-3 w-3 ml-auto" />}
+            {user && <CheckIcon className="h-3 w-3 ml-auto" />}
           </button>
         </div>
         
         {/* Sync Actions */}
-        {session && (
+        {user && (
           <div className="mt-3 px-3">
             <div className="flex gap-1">
               <button 
@@ -205,20 +206,20 @@ export function Sidebar({ activePage = "pipeline" }: SidebarProps) {
       </nav>
 
       <div className="border-t p-3">
-        {session ? (
+        {user ? (
           <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
             <Avatar className="h-8 w-8 border">
-              <AvatarImage src={session.user?.image || undefined} />
+              <AvatarImage src={user.imageUrl || undefined} />
               <AvatarFallback className="bg-secondary text-xs font-medium">
-                {session.user?.name?.split(' ').map(n => n[0]).join('') || '?'}
+                {user.fullName?.split(" ").map(n => n[0]).join("") || "?"}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium leading-none truncate">
-                {session.user?.name}
+                {user.fullName}
               </p>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {session.user?.email}
+                {user.primaryEmailAddress?.emailAddress}
               </p>
             </div>
           </div>

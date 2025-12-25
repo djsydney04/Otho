@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { createEvent } from "@/lib/integrations/google/calendar"
+import { requireGoogleAccessToken } from "@/lib/integrations/google/credentials"
 
 // POST /api/calendar/create - Create a new calendar event
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.accessToken) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
+    const credentials = await requireGoogleAccessToken()
+    if (credentials.error) {
+      return NextResponse.json({ error: credentials.error }, { status: 401 })
     }
 
     const body = await request.json()
@@ -26,7 +21,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const event = await createEvent(session.accessToken, {
+    const event = await createEvent(credentials.accessToken, {
       summary,
       description,
       startDateTime,
@@ -49,4 +44,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

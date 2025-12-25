@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { listEvents, matchEventsWithFounders, matchEventToFounder } from "@/lib/integrations/google/calendar"
 import { createServerClient } from "@/lib/supabase/client"
+import { requireGoogleAccessToken } from "@/lib/integrations/google/credentials"
 
 // POST /api/calendar/sync - Sync calendar and match with pipeline
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.accessToken) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
+    const credentials = await requireGoogleAccessToken()
+    if (credentials.error) {
+      return NextResponse.json({ error: credentials.error }, { status: 401 })
     }
 
     const supabase = createServerClient()
@@ -52,7 +47,7 @@ export async function POST(request: NextRequest) {
     const now = new Date()
     const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
-    const events = await listEvents(session.accessToken, {
+    const events = await listEvents(credentials.accessToken, {
       timeMin: threeMonthsAgo.toISOString(),
       timeMax: now.toISOString(),
       maxResults: 250,

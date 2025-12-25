@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { createServerClient } from "@/lib/supabase/client"
 import type { CompanyInsert } from "@/lib/supabase/types"
+import { getAuthenticatedUser, getAuthenticatedUserId } from "@/lib/clerk"
 
 // GET /api/companies - List all companies with relations
 export async function GET(request: NextRequest) {
   const supabase = createServerClient()
+  const clerkUserId = getAuthenticatedUserId()
+
+  if (!clerkUserId) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("default_workspace_id")
+    .eq("clerk_user_id", clerkUserId)
+    .maybeSingle()
+
+  if (!profile?.default_workspace_id) {
+    return NextResponse.json({ error: "Workspace not found" }, { status: 400 })
+  }
   
   const { searchParams } = new URL(request.url)
   const stage = searchParams.get("stage")
@@ -22,6 +36,7 @@ export async function GET(request: NextRequest) {
       drive_documents(*)
     `)
     .order("created_at", { ascending: false })
+    .eq("workspace_id", profile.default_workspace_id)
   
   if (stage && stage !== "all") {
     query = query.eq("stage", stage as "Inbound" | "Qualified" | "Diligence" | "Committed" | "Passed")
@@ -53,15 +68,17 @@ export async function POST(request: NextRequest) {
   
   try {
     // Get current user session
-    const session = await getServerSession(authOptions)
+    const user = await getAuthenticatedUser()
     let owner_id: string | null = null
+    let workspace_id: string | null = null
     
     // If user is logged in, find or create them in our users table
-    if (session?.user?.email) {
+    if (user?.emailAddresses?.[0]?.emailAddress) {
+      const primaryEmail = user.emailAddresses[0].emailAddress
       const { data: existingUser } = await supabase
         .from("users")
         .select("id")
-        .eq("email", session.user.email)
+        .eq("email", primaryEmail)
         .single()
       
       if (existingUser) {
@@ -71,12 +88,12 @@ export async function POST(request: NextRequest) {
         const { data: newUser } = await supabase
           .from("users")
           .insert({
-            email: session.user.email,
-            name: session.user.name || session.user.email,
-            avatar_url: session.user.image,
-            initials: session.user.name
-              ? session.user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
-              : session.user.email.slice(0, 2).toUpperCase(),
+            email: primaryEmail,
+            name: user.fullName || primaryEmail,
+            avatar_url: user.imageUrl,
+            initials: user.fullName
+              ? user.fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+              : primaryEmail.slice(0, 2).toUpperCase(),
           })
           .select("id")
           .single()
@@ -84,6 +101,39 @@ export async function POST(request: NextRequest) {
         if (newUser) {
           owner_id = newUser.id
         }
+      }
+    }
+
+    if (user?.id) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("default_workspace_id")
+        .eq("clerk_user_id", user.id)
+        .maybeSingle()
+      workspace_id = profile?.default_workspace_id ?? null
+    }
+
+    if (!workspace_id) {
+      return NextResponse.json({ error: "Workspace not found" }, { status: 400 })
+    }
+
+    const { data: workspace } = await supabase
+      .from("workspaces")
+      .select("plan")
+      .eq("id", workspace_id)
+      .maybeSingle()
+
+    if (workspace?.plan === "hobby") {
+      const { count } = await supabase
+        .from("companies")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspace_id)
+
+      if ((count ?? 0) >= 30) {
+        return NextResponse.json(
+          { error: "Hobby plan limit reached (30 contacts)." },
+          { status: 403 },
+        )
       }
     }
     
@@ -139,6 +189,7 @@ export async function POST(request: NextRequest) {
       founder_name,
       founder_email,
       owner_id,
+      workspace_id,
     }
     
     const { data: company, error: companyError } = await supabase
@@ -175,4 +226,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-

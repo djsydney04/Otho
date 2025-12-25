@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { createServerClient } from "@/lib/supabase/client"
+import { getAuthenticatedUser } from "@/lib/clerk"
 
 // GET /api/comments - List comments (optionally filtered by company)
 export async function GET(request: NextRequest) {
@@ -38,15 +37,16 @@ export async function POST(request: NextRequest) {
   
   try {
     // Get current user session
-    const session = await getServerSession(authOptions)
+    const user = await getAuthenticatedUser()
     let author_id: string | null = null
     
     // If user is logged in, find or create them in our users table
-    if (session?.user?.email) {
+    if (user?.emailAddresses?.[0]?.emailAddress) {
+      const primaryEmail = user.emailAddresses[0].emailAddress
       const { data: existingUser } = await supabase
         .from("users")
         .select("id")
-        .eq("email", session.user.email)
+        .eq("email", primaryEmail)
         .single()
       
       if (existingUser) {
@@ -56,12 +56,12 @@ export async function POST(request: NextRequest) {
         const { data: newUser } = await supabase
           .from("users")
           .insert({
-            email: session.user.email,
-            name: session.user.name || session.user.email,
-            avatar_url: session.user.image,
-            initials: session.user.name
-              ? session.user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
-              : session.user.email.slice(0, 2).toUpperCase(),
+            email: primaryEmail,
+            name: user.fullName || primaryEmail,
+            avatar_url: user.imageUrl,
+            initials: user.fullName
+              ? user.fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+              : primaryEmail.slice(0, 2).toUpperCase(),
           })
           .select("id")
           .single()
@@ -113,4 +113,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-

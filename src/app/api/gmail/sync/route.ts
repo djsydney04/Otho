@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { fetchEmails, matchEmailsWithFounders, matchEmailToFounder } from "@/lib/integrations/google/gmail"
 import { createServerClient } from "@/lib/supabase/client"
+import { requireGoogleAccessToken } from "@/lib/integrations/google/credentials"
 
 // POST /api/gmail/sync - Sync emails with pipeline
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.accessToken) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
+    const credentials = await requireGoogleAccessToken()
+    if (credentials.error) {
+      return NextResponse.json({ error: credentials.error }, { status: 401 })
     }
 
     const supabase = createServerClient()
@@ -56,7 +51,7 @@ export async function POST(request: NextRequest) {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     const dateQuery = `after:${thirtyDaysAgo.toISOString().split('T')[0]}`
 
-    const allEmails = await fetchEmails(session.accessToken, {
+    const allEmails = await fetchEmails(credentials.accessToken, {
       maxResults: 100,
       q: dateQuery,
     })

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Source_Serif_4, Inter } from "next/font/google";
 import "./globals.css";
-import { Providers } from "@/components/providers";
+import { ClerkProvider } from "@clerk/nextjs";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -30,7 +30,7 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${sourceSerif.variable} font-sans antialiased`}
       >
-        <Providers>{children}</Providers>
+        <ClerkProvider>{children}</ClerkProvider>
       </body>
     </html>
   );
