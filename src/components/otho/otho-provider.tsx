@@ -275,21 +275,24 @@ function OthoOverlay() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-2xl bg-background/80 backdrop-blur-xl border-white/60 shadow-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>Ask Otho</span>
-            <span className="text-xs text-muted-foreground font-normal">⌘K anywhere</span>
+      <DialogContent className="sm:max-w-2xl !fixed !bottom-6 !top-auto !translate-y-0 !left-[50%] !-translate-x-[50%] bg-background border shadow-2xl rounded-xl">
+        <DialogHeader className="pb-2">
+          <DialogTitle className="flex items-center justify-between text-base">
+            <div className="flex items-center gap-2">
+              <div className="h-6 w-6 rounded-lg bg-primary/10 flex items-center justify-center">
+                <svg className="h-3.5 w-3.5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z" />
+                </svg>
+              </div>
+              <span>Ask Otho</span>
+            </div>
+            <kbd className="text-[10px] text-muted-foreground font-normal bg-muted px-1.5 py-0.5 rounded border">⌘K</kbd>
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
-          {/* Messages area with fixed height */}
-          <div className="max-h-72 min-h-[100px] overflow-y-auto rounded-xl border bg-background/50 p-4 text-sm leading-relaxed space-y-4">
-            {messages.length === 0 && !loading && (
-              <p className="text-muted-foreground text-center py-4">
-                Ask anything about this page or your portfolio...
-              </p>
-            )}
+        
+        {/* Messages area */}
+        {messages.length > 0 && (
+          <div className="max-h-64 overflow-y-auto border rounded-lg bg-secondary/30 p-3 text-sm space-y-3 mb-3">
             {messages.map((message, idx) => (
               <div key={idx} className="space-y-1">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -298,7 +301,7 @@ function OthoOverlay() {
                 {message.role === "assistant" ? (
                   <FormattedMessage content={message.content} />
                 ) : (
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  <p className="whitespace-pre-wrap text-foreground">{message.content}</p>
                 )}
               </div>
             ))}
@@ -310,28 +313,30 @@ function OthoOverlay() {
               </div>
             )}
           </div>
-          <div className="space-y-2">
-            <Textarea
-              placeholder="Ask Otho anything…"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={2}
-              className="resize-none bg-background/60"
-              autoFocus
-            />
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
-                {accountContext ? `Context: ${accountContext.contextName || 'This account'}` : 'Context from this screen'}
-              </span>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={closeOverlay}>
-                  Close
-                </Button>
-                <Button size="sm" onClick={handleSend} disabled={loading || !input.trim()}>
-                  {loading ? "Thinking…" : "Send"}
-                </Button>
-              </div>
+        )}
+        
+        {/* Input */}
+        <div className="space-y-3">
+          <Textarea
+            placeholder={messages.length === 0 ? "Ask anything about this page or your portfolio..." : "Continue the conversation..."}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={2}
+            className="resize-none bg-background text-sm"
+            autoFocus
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              {accountContext ? `Context: ${accountContext.contextName || 'This account'}` : 'Using page context'}
+            </span>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={closeOverlay}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSend} disabled={loading || !input.trim()}>
+                {loading ? "Thinking…" : "Send"}
+              </Button>
             </div>
           </div>
         </div>

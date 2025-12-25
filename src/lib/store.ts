@@ -55,6 +55,10 @@ interface AppState {
   // Current user
   currentUser: User | null
   
+  // UI state
+  sidebarCollapsed: boolean
+  setSidebarCollapsed: (collapsed: boolean) => void
+  
   // Actions
   fetchCompanies: () => Promise<void>
   fetchTags: () => Promise<void>
@@ -111,6 +115,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   lastEmailSyncTime: null,
   emailSyncing: false,
   currentUser: null,
+  sidebarCollapsed: false,
+  
+  // UI actions
+  setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   
   // Fetch companies from API
   fetchCompanies: async () => {

@@ -181,9 +181,16 @@ export default function HomePage() {
               <Card className="border shadow-sm">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium">Signals & News</CardTitle>
-                  <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={fetchNews} disabled={newsLoading}>
-                    {newsLoading ? "Loading..." : "Refresh"}
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={fetchNews} disabled={newsLoading}>
+                      {newsLoading ? "Loading..." : "Refresh"}
+                    </Button>
+                    <Link href="/discover">
+                      <Button variant="ghost" size="sm" className="h-6 text-xs">
+                        View all →
+                      </Button>
+                    </Link>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {news.slice(0, 3).map((article) => (

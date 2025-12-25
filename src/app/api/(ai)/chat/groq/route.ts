@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server"
+import { GoogleGenerativeAI } from "@google/generative-ai"
 import { createServerClient } from "@/lib/supabase/client"
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY
-// compound-beta enables built-in web search and tools
-const GROQ_MODEL = process.env.GROQ_MODEL || "compound"
+// Use GEMINI_API_KEY (user's env var naming)
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash-exp"
 
 interface IncomingMessage {
   role: "user" | "assistant"
@@ -15,11 +16,14 @@ export async function POST(request: Request) {
     const { messages = [], pageContext }: { messages: IncomingMessage[]; pageContext?: string } =
       await request.json()
 
-    if (!GROQ_API_KEY) {
+    if (!GEMINI_API_KEY) {
       return NextResponse.json({
-        reply: "Add a GROQ_API_KEY to enable Otho, your AI copilot.",
+        reply: "Please add GEMINI_API_KEY to your .env.local file to enable Otho. You can get an API key from https://aistudio.google.com/app/apikey",
       })
     }
+
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL })
 
     const supabase = createServerClient()
     const { data: companies } = await supabase
@@ -34,6 +38,7 @@ export async function POST(request: Request) {
           last_touch,
           is_priority,
           needs_followup,
+          ai_analysis,
           founder:founders(name, email, linkedin, twitter)
         `,
       )
@@ -48,10 +53,11 @@ export async function POST(request: Request) {
       last_touch: company.last_touch,
       is_priority: company.is_priority,
       needs_followup: company.needs_followup,
+      ai_analysis: company.ai_analysis,
       founder: company.founder,
     }))
 
-    const systemPrompt = `You are Otho, an expert Venture Capital Analyst and knowledgeable AI assistant.
+    const systemPrompt = `You are Otho, an expert Venture Capital Analyst and knowledgeable AI assistant powered by Google Gemini.
 
 You can answer ANY question - both about the user's portfolio AND general questions about investing, markets, technology, startups, or any other topic.
 
@@ -101,37 +107,43 @@ ${JSON.stringify(context || [])}
 CURRENT SCREEN:
 ${pageContext || "Dashboard"}`
 
-    const groqMessages = [
-      {
-        role: "system",
-        content: systemPrompt,
-      },
-      ...messages.slice(-6),
-    ]
+    // Build conversation for Gemini
+    const chatHistory = messages.slice(0, -1).map((msg) => ({
+      role: msg.role === "user" ? "user" : "model",
+      parts: [{ text: msg.content }],
+    }))
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: groqMessages,
-        temperature: 0.3, // Slightly higher for creative analysis
-        max_tokens: 1024,
-      }),
-    })
+    // Get the last user message
+    const lastMessage = messages[messages.length - 1]
+    const userPrompt = messages.length === 1
+      ? `${systemPrompt}\n\nUser: ${lastMessage?.content || ""}`
+      : lastMessage?.content || ""
 
-    const data = await response.json()
+    let rawReply: string
 
-    if (!response.ok) {
-      console.error("Groq API error:", data)
-      return NextResponse.json({ error: data?.error?.message || "Failed to reach Otho." }, { status: 500 })
+    if (chatHistory.length > 0) {
+      // Use chat mode for multi-turn conversations
+      const chat = model.startChat({
+        history: chatHistory as any,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+        },
+      })
+      const result = await chat.sendMessage(userPrompt)
+      rawReply = result.response.text()
+    } else {
+      // Single turn - include system prompt
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+        },
+      })
+      rawReply = result.response.text()
     }
 
-    const rawReply = data?.choices?.[0]?.message?.content || "I'm still thinking."
-    
     // Parse out tool calls
     let reply = rawReply
     let proposedAction = null
@@ -151,8 +163,8 @@ ${pageContext || "Dashboard"}`
     }
 
     return NextResponse.json({ reply, proposedAction })
-  } catch (error) {
-    console.error("Groq route error:", error)
-    return NextResponse.json({ error: "Unable to process chat." }, { status: 500 })
+  } catch (error: any) {
+    console.error("Gemini route error:", error)
+    return NextResponse.json({ error: error?.message || "Unable to process chat." }, { status: 500 })
   }
 }

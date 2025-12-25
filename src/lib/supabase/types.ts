@@ -213,6 +213,8 @@ export type Database = {
       }
       companies: {
         Row: {
+          ai_analysis: string | null
+          ai_analysis_updated_at: string | null
           created_at: string
           description: string | null
           followup_date: string | null
@@ -233,6 +235,8 @@ export type Database = {
           website: string | null
         }
         Insert: {
+          ai_analysis?: string | null
+          ai_analysis_updated_at?: string | null
           created_at?: string
           description?: string | null
           followup_date?: string | null
@@ -253,6 +257,8 @@ export type Database = {
           website?: string | null
         }
         Update: {
+          ai_analysis?: string | null
+          ai_analysis_updated_at?: string | null
           created_at?: string
           description?: string | null
           followup_date?: string | null
@@ -743,6 +749,126 @@ export type Database = {
         }
         Relationships: []
       }
+      news_articles: {
+        Row: {
+          id: string
+          external_id: string | null
+          title: string
+          url: string
+          source_name: string | null
+          source_url: string | null
+          author: string | null
+          description: string | null
+          content: string | null
+          image_url: string | null
+          published_at: string | null
+          category: string | null
+          relevance_score: number | null
+          company_id: string | null
+          is_portfolio_relevant: boolean | null
+          metadata: Json | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          external_id?: string | null
+          title: string
+          url: string
+          source_name?: string | null
+          source_url?: string | null
+          author?: string | null
+          description?: string | null
+          content?: string | null
+          image_url?: string | null
+          published_at?: string | null
+          category?: string | null
+          relevance_score?: number | null
+          company_id?: string | null
+          is_portfolio_relevant?: boolean | null
+          metadata?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          external_id?: string | null
+          title?: string
+          url?: string
+          source_name?: string | null
+          source_url?: string | null
+          author?: string | null
+          description?: string | null
+          content?: string | null
+          image_url?: string | null
+          published_at?: string | null
+          category?: string | null
+          relevance_score?: number | null
+          company_id?: string | null
+          is_portfolio_relevant?: boolean | null
+          metadata?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      news_categories: {
+        Row: {
+          id: string
+          slug: string
+          label: string
+          description: string | null
+          icon: string | null
+          sort_order: number | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          slug: string
+          label: string
+          description?: string | null
+          icon?: string | null
+          sort_order?: number | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          slug?: string
+          label?: string
+          description?: string | null
+          icon?: string | null
+          sort_order?: number | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      user_interests: {
+        Row: {
+          id: string
+          user_id: string | null
+          category: string
+          enabled: boolean | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          category: string
+          enabled?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          category?: string
+          enabled?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           avatar_url: string | null
@@ -829,6 +955,9 @@ export type CalendarEvent = Tables<"calendar_events">
 export type EmailThread = Tables<"email_threads">
 export type DriveDocument = Tables<"drive_documents">
 export type NotionPage = Tables<"notion_pages">
+export type NewsArticle = Tables<"news_articles">
+export type NewsCategory = Tables<"news_categories">
+export type UserInterest = Tables<"user_interests">
 export type Stage = Enums<"stage">
 export type CommentType = Enums<"comment_type">
 

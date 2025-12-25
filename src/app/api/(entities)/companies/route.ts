@@ -2,7 +2,28 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { createServerClient } from "@/lib/supabase/client"
+import { generateCompanyAnalysis, isGeminiConfigured, type CompanyContext } from "@/lib/integrations/gemini"
 import type { CompanyInsert } from "@/lib/supabase/types"
+
+// Helper function to generate AI analysis in background (non-blocking)
+async function generateAnalysisInBackground(companyId: string, context: CompanyContext) {
+  try {
+    const analysis = await generateCompanyAnalysis(context)
+    const supabase = createServerClient()
+    
+    await supabase
+      .from("companies")
+      .update({
+        ai_analysis: analysis,
+        ai_analysis_updated_at: new Date().toISOString(),
+      })
+      .eq("id", companyId)
+
+    console.log(`[AI Analysis] Generated analysis for company ${companyId}`)
+  } catch (error) {
+    console.error(`[AI Analysis] Failed for company ${companyId}:`, error)
+  }
+}
 
 // GET /api/companies - List all companies with relations
 export async function GET(request: NextRequest) {
@@ -168,6 +189,20 @@ export async function POST(request: NextRequest) {
       content: `Added ${name} to pipeline.`,
       comment_type: "note",
     })
+    
+    // Generate AI analysis in background (non-blocking)
+    if (isGeminiConfigured()) {
+      const context: CompanyContext = {
+        name,
+        description,
+        website,
+        stage,
+        founderName: founder_name,
+        founderEmail: founder_email,
+      }
+      // Don't await - let it run in background
+      generateAnalysisInBackground(company.id, context)
+    }
     
     return NextResponse.json(company, { status: 201 })
   } catch (error: any) {
