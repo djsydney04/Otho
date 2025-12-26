@@ -5,12 +5,14 @@ import { Sidebar } from "@/components/pipeline/sidebar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useAppStore } from "@/lib/store"
+import { CompanyReferenceCard } from "@/components/shared/company-reference-card"
 
 interface ChatMessage {
   id?: string
   role: "user" | "assistant"
   content: string
   proposedAction?: any
+  companyReferences?: Array<{companyId: string; companyName: string; reason: string}>
 }
 
 interface Conversation {
@@ -21,8 +23,11 @@ interface Conversation {
   founder_id: string | null
 }
 
-// Markdown renderer
+// Markdown renderer - replaces asterisks with bullet points
 function FormattedMessage({ content }: { content: string }) {
+  // Replace asterisk bullet points with proper bullets
+  let formattedContent = content.replace(/^\s*\*\s+/gm, '- ')
+  
   const formatInline = (text: string): React.ReactNode => {
     const parts: React.ReactNode[] = []
     let lastIndex = 0
@@ -63,7 +68,7 @@ function FormattedMessage({ content }: { content: string }) {
     return parts.length === 0 ? text : parts.length === 1 ? parts[0] : <>{parts}</>
   }
 
-  const lines = content.split('\n')
+  const lines = formattedContent.split('\n')
   const elements: React.ReactNode[] = []
   
   lines.forEach((line, idx) => {
@@ -117,7 +122,7 @@ export default function OthoPage() {
   const [loading, setLoading] = useState(false)
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
-  const [showHistory, setShowHistory] = useState(false)
+  const [showHistory, setShowHistory] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const initialized = useRef(false)
@@ -215,10 +220,18 @@ export default function OthoPage() {
       const assistantMsg: ChatMessage = {
         role: "assistant",
         content: replyContent,
-        proposedAction: data.proposedAction
+        proposedAction: data.proposedAction,
+        companyReferences: data.companyReferences
       }
 
       setMessages(prev => [...prev, assistantMsg])
+      
+      // Handle account changes - refresh if actions were taken
+      if (data.proposedAction?.tool?.startsWith('update_')) {
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
+      }
 
       // Save to history
       try {
@@ -380,72 +393,84 @@ export default function OthoPage() {
                 )}
                 
                 {messages.map((msg, idx) => (
-                  <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                      <div className={`rounded-2xl px-5 py-3 text-sm leading-relaxed shadow-sm ${
-                        msg.role === 'user' 
-                          ? 'bg-primary text-primary-foreground rounded-br-sm' 
-                          : 'bg-white border text-foreground rounded-bl-sm'
-                      }`}>
-                        {msg.role === 'user' ? (
-                          <span className="whitespace-pre-wrap">{msg.content}</span>
-                        ) : (
-                          <FormattedMessage content={msg.content} />
-                        )}
+                  <div key={idx} className="space-y-2">
+                    <div className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                      <div className={`flex-1 max-w-[75%] ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+                        <div className={`inline-block text-sm leading-relaxed px-3 py-2 rounded ${
+                          msg.role === 'user' 
+                            ? 'bg-primary/10 text-foreground' 
+                            : 'text-muted-foreground'
+                        }`}>
+                          {msg.role === 'user' ? (
+                            <span className="whitespace-pre-wrap">{msg.content}</span>
+                          ) : (
+                            <FormattedMessage content={msg.content} />
+                          )}
+                        </div>
                       </div>
-
-                      {/* Action Card */}
-                      {msg.proposedAction && msg.role === 'assistant' && (
-                        <Card className="mt-3 w-full max-w-sm overflow-hidden border shadow-sm bg-amber-50/50 border-amber-100">
-                          <CardContent className="p-4">
-                            <p className="text-xs font-medium text-amber-600 uppercase tracking-wide mb-2">Proposed Update</p>
-                            <p className="text-sm font-medium text-foreground mb-3">
-                              Set <strong>{msg.proposedAction.field}</strong> to <strong>{String(msg.proposedAction.value)}</strong> for {msg.proposedAction.companyName}?
-                            </p>
-                            <div className="flex gap-2">
-                              <Button size="sm" onClick={() => handleAcceptAction(msg.proposedAction, idx)} className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white">
-                                Accept
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                className="h-8 text-xs"
-                                onClick={() => setMessages(prev => prev.map((m, i) => i === idx ? { ...m, proposedAction: undefined } : m))}
-                              >
-                                Dismiss
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
-
-                      {/* Company Cards */}
-                      {msg.role === 'assistant' && companies.filter(c => msg.content.includes(c.name)).slice(0, 3).map(company => (
-                        <Card 
-                          key={company.id}
-                          className="mt-3 w-full max-w-sm cursor-pointer hover:shadow-md transition-all"
-                          onClick={() => window.location.href = `/company/${company.id}`}
-                        >
-                          <div className="h-1 bg-primary/20 w-full" />
-                          <CardContent className="p-3 flex items-center justify-between">
-                            <div>
-                              <p className="text-[10px] font-medium text-muted-foreground uppercase">View</p>
-                              <p className="font-medium text-sm">{company.name}</p>
-                            </div>
-                            <span className="text-xs text-primary">→</span>
-                          </CardContent>
-                        </Card>
-                      ))}
                     </div>
+
+                    {/* Company References */}
+                    {msg.companyReferences && msg.companyReferences.length > 0 && (
+                      <div className="flex gap-2 flex-row">
+                        <div className="flex-1 max-w-[75%] space-y-2">
+                          {msg.companyReferences.map((ref: any, refIdx: number) => {
+                            const company = companies.find(c => c.id === ref.companyId)
+                            if (!company) return null
+                            return (
+                              <CompanyReferenceCard
+                                key={refIdx}
+                                companyId={ref.companyId}
+                                companyName={ref.companyName || company.name}
+                                reason={ref.reason}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Card */}
+                    {msg.proposedAction && msg.role === 'assistant' && (
+                      <div className="flex gap-2 flex-row">
+                        <div className="flex-1 max-w-[75%]">
+                          <Card className="overflow-hidden border shadow-sm bg-amber-50/50 border-amber-100">
+                            <CardContent className="p-4">
+                              <p className="text-xs font-medium text-amber-600 uppercase tracking-wide mb-2">Proposed Update</p>
+                              <p className="text-sm font-medium text-foreground mb-3">
+                                Set <strong>{msg.proposedAction.field}</strong> to <strong>{String(msg.proposedAction.value)}</strong> for {msg.proposedAction.companyName}?
+                              </p>
+                              <div className="flex gap-2">
+                                <Button size="sm" onClick={() => handleAcceptAction(msg.proposedAction, idx)} className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white">
+                                  Accept
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-8 text-xs"
+                                  onClick={() => setMessages(prev => prev.map((m, i) => i === idx ? { ...m, proposedAction: undefined } : m))}
+                                >
+                                  Dismiss
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
                 
                 {loading && (
-                  <div className="flex justify-start">
-                    <div className="bg-white border rounded-2xl rounded-bl-sm px-5 py-4 shadow-sm flex gap-2">
-                      <div className="h-2 w-2 bg-primary/40 rounded-full animate-bounce" />
-                      <div className="h-2 w-2 bg-primary/40 rounded-full animate-bounce [animation-delay:0.2s]" />
-                      <div className="h-2 w-2 bg-primary/40 rounded-full animate-bounce [animation-delay:0.4s]" />
+                  <div className="flex gap-2 flex-row">
+                    <div className="flex-1 max-w-[75%] text-left">
+                      <div className="inline-block text-sm px-3 py-2 rounded text-muted-foreground">
+                        <div className="flex gap-1.5">
+                          <div className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-bounce" />
+                          <div className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.15s]" />
+                          <div className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.3s]" />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

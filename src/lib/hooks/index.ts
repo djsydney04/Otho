@@ -9,4 +9,5 @@
 
 export { useDrive, type DriveFile, type DriveAttachment } from "./use-drive"
 export { useKeyboard, useEscapeKey, useSearchFocus } from "./use-keyboard"
+export { useAuth } from "./use-auth"
 

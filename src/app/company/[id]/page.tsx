@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { useSession, signIn } from "next-auth/react"
+import { useAuth } from "@/lib/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -29,7 +29,7 @@ import {
   LinkedInIcon,
   GoogleCalendarIcon,
 } from "@/components/icons"
-import { MeetingList, EmailList, CommentTimeline, DrivePicker } from "@/components/shared"
+import { MeetingList, EmailList, CommentTimeline, DrivePicker, OthoReport } from "@/components/shared"
 import { AccountChat } from "@/components/otho/account-chat"
 import {
   useAppStore,
@@ -52,7 +52,7 @@ export default function CompanyDetailPage() {
   const params = useParams()
   const router = useRouter()
   const companyId = params.id as string
-  const { data: session } = useSession()
+  const { user } = useAuth()
 
   const { lastSyncTime, syncing, emailSyncing, updateCompanyStage, addComment } =
     useAppStore()
@@ -187,6 +187,14 @@ export default function CompanyDetailPage() {
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Left Column - Founder & Activity */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Otho Report */}
+            <OthoReport 
+              companyId={company.id} 
+              name={company.name}
+              initialInsights={company.ai_analysis}
+              website={company.website}
+            />
+
             {/* Founder Card */}
             <FounderCard founder={founder} website={company.website} />
 
@@ -219,9 +227,12 @@ export default function CompanyDetailPage() {
 
           {/* Right Column - Sidebar */}
           <div className="space-y-6">
+            {/* Otho Chat - Moved to top */}
+            <AccountChat companyId={company.id} contextName={company.name} />
+
             {/* Google Calendar Card */}
             <GoogleCalendarCard
-              session={session}
+              user={user}
               lastSyncTime={lastSyncTime}
               syncing={syncing}
               onSync={() => syncCalendar()}
@@ -232,9 +243,6 @@ export default function CompanyDetailPage() {
               companyId={company.id}
               initialAttachments={(company as any).drive_documents || []}
             />
-
-            {/* Otho Chat */}
-            <AccountChat companyId={company.id} contextName={company.name} />
 
             {/* Owner */}
             <OwnerCard owner={owner} />
@@ -492,41 +500,6 @@ function FounderCard({
             </div>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <a href={`mailto:${founder.email}`}>
-                <MailIcon className="h-4 w-4 mr-1.5" />
-                Email
-              </a>
-            </Button>
-            <Button size="sm">
-              <CalendarIcon className="h-4 w-4 mr-1.5" />
-              Schedule
-            </Button>
-            {founder.linkedin && (
-              <Button variant="outline" size="sm" asChild>
-                <a
-                  href={getLinkedInUrl(founder.linkedin)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <LinkedInIcon className="h-4 w-4 mr-1.5 text-[#0A66C2]" />
-                  LinkedIn
-                </a>
-              </Button>
-            )}
-            {founder.twitter && (
-              <Button variant="outline" size="sm" asChild>
-                <a
-                  href={getTwitterUrl(founder.twitter)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <TwitterIcon className="h-4 w-4 mr-1.5" />X Profile
-                </a>
-              </Button>
-            )}
-          </div>
         </div>
       </CardContent>
     </Card>
@@ -534,16 +507,37 @@ function FounderCard({
 }
 
 function GoogleCalendarCard({
-  session,
+  user,
   lastSyncTime,
   syncing,
   onSync,
 }: {
-  session: any
+  user: any
   lastSyncTime: Date | null
   syncing: boolean
   onSync: () => void
 }) {
+  // Check if Google Calendar is connected (has access token)
+  const [isConnected, setIsConnected] = useState(false)
+  
+  useEffect(() => {
+    async function checkConnection() {
+      if (!user) {
+        setIsConnected(false)
+        return
+      }
+      
+      try {
+        const res = await fetch('/api/integrations/check?provider=google_calendar')
+        const data = await res.json()
+        setIsConnected(data.connected || false)
+      } catch {
+        setIsConnected(false)
+      }
+    }
+    checkConnection()
+  }, [user])
+  
   return (
     <Card className="elevated">
       <CardHeader className="pb-3">
@@ -551,7 +545,7 @@ function GoogleCalendarCard({
           <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
             Google Calendar
           </CardTitle>
-          {session && (
+          {isConnected && (
             <div className="flex items-center gap-2">
               <div className="sync-indicator" />
               <span className="text-xs text-muted-foreground">Connected</span>
@@ -560,12 +554,12 @@ function GoogleCalendarCard({
         </div>
       </CardHeader>
       <CardContent>
-        {session ? (
+        {isConnected ? (
           <div className="flex items-center justify-between rounded-lg bg-secondary/50 px-3 py-2">
             <div className="flex items-center gap-2">
               <GoogleCalendarIcon className="h-5 w-5" />
               <div>
-                <p className="text-sm font-medium">{session.user?.email}</p>
+                <p className="text-sm font-medium">{user?.email}</p>
                 {lastSyncTime && (
                   <p className="text-xs text-muted-foreground">
                     Synced {formatRelative(lastSyncTime.toISOString())}
@@ -578,10 +572,12 @@ function GoogleCalendarCard({
             </Button>
           </div>
         ) : (
-          <Button variant="outline" className="w-full" onClick={() => signIn("google")}>
-            <GoogleCalendarIcon className="h-4 w-4 mr-2" />
-            Connect Calendar
-          </Button>
+          <Link href="/settings/integrations">
+            <Button variant="outline" className="w-full">
+              <GoogleCalendarIcon className="h-4 w-4 mr-2" />
+              Connect Calendar
+            </Button>
+          </Link>
         )}
       </CardContent>
     </Card>

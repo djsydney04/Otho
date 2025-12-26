@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { createServerClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/server"
 import { generateCompanyAnalysis, isGeminiConfigured, type CompanyContext } from "@/lib/integrations/gemini"
 import type { CompanyInsert } from "@/lib/supabase/types"
+import { canCreateContact } from "@/lib/tiers"
 
 // Helper function to generate AI analysis in background (non-blocking)
 async function generateAnalysisInBackground(companyId: string, context: CompanyContext) {
   try {
+    if (!isGeminiConfigured()) {
+      console.log("[AI Analysis] Gemini not configured, skipping")
+      return
+    }
+
     const analysis = await generateCompanyAnalysis(context)
-    const supabase = createServerClient()
     
+    const supabase = await createClient()
     await supabase
       .from("companies")
       .update({
@@ -18,94 +22,112 @@ async function generateAnalysisInBackground(companyId: string, context: CompanyC
         ai_analysis_updated_at: new Date().toISOString(),
       })
       .eq("id", companyId)
-
-    console.log(`[AI Analysis] Generated analysis for company ${companyId}`)
+    
+    console.log(`[AI Analysis] Generated and saved analysis for company ${companyId}`)
   } catch (error) {
-    console.error(`[AI Analysis] Failed for company ${companyId}:`, error)
+    console.error("[AI Analysis] Error generating analysis:", error)
   }
 }
 
-// GET /api/companies - List all companies with relations
+// GET /api/companies - List all companies
 export async function GET(request: NextRequest) {
-  const supabase = createServerClient()
+  const supabase = await createClient()
   
-  const { searchParams } = new URL(request.url)
-  const stage = searchParams.get("stage")
-  const search = searchParams.get("search")
-  
-  let query = supabase
-    .from("companies")
-    .select(`
-      *,
-      founder:founders(*),
-      owner:users(*),
-      tags:company_tags(tag:tags(*)),
-      drive_documents(*)
-    `)
-    .order("created_at", { ascending: false })
-  
-  if (stage && stage !== "all") {
-    query = query.eq("stage", stage as "Inbound" | "Qualified" | "Diligence" | "Committed" | "Passed")
-  }
-  
-  if (search) {
-    query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`)
-  }
-  
-  const { data, error } = await query
-  
-  if (error) {
-    console.error("Error fetching companies:", error)
+  try {
+    const { searchParams } = new URL(request.url)
+    const stage = searchParams.get("stage")
+    const tagId = searchParams.get("tag_id")
+    const search = searchParams.get("search")
+    
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // SECURITY: Only show companies owned by the current user
+    // This is a CRM - each account should only see their own data
+    const { data: companies, error } = await supabase
+      .from("companies")
+      .select(`
+        *,
+        founder:founders(*),
+        tags:company_tags(tag:tags(*)),
+        comments:comments(*)
+      `)
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: false })
+    
+    if (error) {
+      console.error("Error fetching companies:", error)
+      return NextResponse.json(
+        { 
+          error: "Failed to fetch companies", 
+          details: error.message 
+        }, 
+        { status: 500 }
+      )
+    }
+    
+    console.log(`[Companies API] Found ${companies?.length || 0} companies for user ${user.id}`)
+    
+    // If we got some companies, log a sample
+    if (companies && companies.length > 0) {
+      console.log(`[Companies API] Sample company IDs: ${companies.slice(0, 3).map((c: any) => c.id).join(', ')}`)
+      console.log(`[Companies API] Sample owner_ids: ${companies.slice(0, 3).map((c: any) => c.owner_id || 'null').join(', ')}`)
+    }
+    
+    let filteredCompanies = companies || []
+
+    // Apply filters
+    if (stage) {
+      filteredCompanies = filteredCompanies.filter((c: any) => c.stage === stage)
+    }
+    
+    if (search) {
+      const searchLower = search.toLowerCase()
+      filteredCompanies = filteredCompanies.filter((c: any) =>
+        c.name?.toLowerCase().includes(searchLower) ||
+        c.description?.toLowerCase().includes(searchLower)
+      )
+    }
+    
+    if (tagId) {
+      filteredCompanies = filteredCompanies.filter((company: any) =>
+        company.tags?.some((tagLink: any) => tagLink.tag?.id === tagId)
+      )
+    }
+
+    console.log(`[Companies API] Returning ${filteredCompanies.length} companies after filtering (stage: ${stage || 'all'}, search: ${search || 'none'}, tagId: ${tagId || 'none'})`)
+    return NextResponse.json(filteredCompanies)
+  } catch (error: any) {
+    console.error("Error in GET /api/companies:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  
-  // Transform the nested tags structure
-  const companies = data?.map(company => ({
-    ...company,
-    tags: company.tags?.map((t: any) => t.tag).filter(Boolean) || []
-  }))
-  
-  return NextResponse.json(companies)
 }
 
 // POST /api/companies - Create a new company
 export async function POST(request: NextRequest) {
-  const supabase = createServerClient()
+  const supabase = await createClient()
   
   try {
-    // Get current user session
-    const session = await getServerSession(authOptions)
-    let owner_id: string | null = null
-    
-    // If user is logged in, find or create them in our users table
-    if (session?.user?.email) {
-      const { data: existingUser } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email", session.user.email)
-        .single()
-      
-      if (existingUser) {
-        owner_id = existingUser.id
-      } else {
-        // Create the user
-        const { data: newUser } = await supabase
-          .from("users")
-          .insert({
-            email: session.user.email,
-            name: session.user.name || session.user.email,
-            avatar_url: session.user.image,
-            initials: session.user.name
-              ? session.user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
-              : session.user.email.slice(0, 2).toUpperCase(),
-          })
-          .select("id")
-          .single()
-        
-        if (newUser) {
-          owner_id = newUser.id
-        }
-      }
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Tier enforcement: Check contact limits
+    const tierCheck = await canCreateContact(user.id, supabase)
+    if (!tierCheck.allowed) {
+      return NextResponse.json(
+        { 
+          error: tierCheck.reason || "Contact limit reached",
+          requiresUpgrade: true,
+          tier: "hobby"
+        },
+        { status: 403 }
+      )
     }
     
     const body = await request.json()
@@ -135,6 +157,19 @@ export async function POST(request: NextRequest) {
       if (existingFounder) {
         founder_id = existingFounder.id
       } else if (founder_name) {
+        // Check tier again for founder creation (counts toward contact limit)
+        const founderTierCheck = await canCreateContact(user.id, supabase)
+        if (!founderTierCheck.allowed) {
+          return NextResponse.json(
+            { 
+              error: founderTierCheck.reason || "Contact limit reached",
+              requiresUpgrade: true,
+              tier: "hobby"
+            },
+            { status: 403 }
+          )
+        }
+
         // Create new founder
         const { data: newFounder, error: founderError } = await supabase
           .from("founders")
@@ -159,7 +194,7 @@ export async function POST(request: NextRequest) {
       founder_id,
       founder_name,
       founder_email,
-      owner_id,
+      owner_id: user.id,
     }
     
     const { data: company, error: companyError } = await supabase
@@ -191,17 +226,22 @@ export async function POST(request: NextRequest) {
     })
     
     // Generate AI analysis in background (non-blocking)
-    if (isGeminiConfigured()) {
+    if (company && isGeminiConfigured()) {
       const context: CompanyContext = {
-        name,
-        description,
-        website,
-        stage,
-        founderName: founder_name,
-        founderEmail: founder_email,
+        name: company.name,
+        description: company.description || "",
+        website: company.website || undefined,
+        stage: company.stage,
+        founderName: company.founder_name || undefined,
+        founderEmail: company.founder_email || undefined,
+        tags: [],
+        comments: [],
+        calendarEvents: [],
+        emailThreads: [],
       }
-      // Don't await - let it run in background
-      generateAnalysisInBackground(company.id, context)
+      
+      // Don't await - run in background
+      generateAnalysisInBackground(company.id, context).catch(console.error)
     }
     
     return NextResponse.json(company, { status: 201 })
@@ -210,4 +250,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-

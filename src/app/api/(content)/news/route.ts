@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/server"
 
 const NEWS_API_KEY = process.env.NEWS_API_KEY
 const NEWS_API_ENDPOINT = "https://newsapi.org/v2/everything"
@@ -77,9 +77,15 @@ export async function GET(request: NextRequest) {
     }
     const fromDate = getFromDate()
 
-    const supabase = createServerClient()
+    const supabase = await createClient()
+    
+    // SECURITY: Get current user and only fetch their companies
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-    // Get portfolio companies for relevance matching
+    // Get portfolio companies for relevance matching - only user's companies
     const { data: companies } = await supabase
       .from("companies")
       .select(`
@@ -90,6 +96,7 @@ export async function GET(request: NextRequest) {
         stage,
         tags:company_tags(tag:tags(label))
       `)
+      .eq("owner_id", user.id)
       .not("name", "is", null)
       .limit(20)
 

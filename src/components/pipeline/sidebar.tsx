@@ -1,24 +1,43 @@
 "use client"
 
-import { useSession, signIn, signOut } from "next-auth/react"
 import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useAppStore, syncCalendar, syncEmails } from "@/lib/store"
+import { useAuth } from "@/lib/hooks/use-auth"
 import {
   HomeIcon,
   OthoIcon,
   LayoutIcon,
   UsersIcon,
-  GoogleCalendarIcon,
-  GmailIcon,
-  CheckIcon,
-  RefreshIcon,
-  LogOutIcon,
-  GoogleDriveIcon,
   DiscoverIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  SettingsIcon,
+  UserIcon,
+  CreditCardIcon,
+  ShieldIcon,
+  PlugIcon,
+  LogOutIcon,
 } from "./icons"
+
+// Team icon component
+function TeamIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+    </svg>
+  )
+}
 
 type SidebarItemProps = {
   label: string
@@ -56,8 +75,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activePage = "home", defaultCollapsed = false, onCollapsedChange }: SidebarProps) {
-  const { data: session, status } = useSession()
-  const { syncing, emailSyncing, clearCalendarData, clearEmailData, sidebarCollapsed, setSidebarCollapsed } = useAppStore()
+  const { user, loading, signOut } = useAuth()
+  const { sidebarCollapsed, setSidebarCollapsed } = useAppStore()
 
   // Use store state or prop default
   const isCollapsed = sidebarCollapsed ?? defaultCollapsed
@@ -68,21 +87,6 @@ export function Sidebar({ activePage = "home", defaultCollapsed = false, onColla
     onCollapsedChange?.(newValue)
   }
 
-  const handleConnectGoogle = () => {
-    signIn("google")
-  }
-
-  const handleDisconnect = () => {
-    clearCalendarData()
-    clearEmailData()
-    signOut({ redirect: false })
-  }
-
-  const handleSync = async () => {
-    await Promise.all([syncCalendar(), syncEmails()])
-  }
-  
-  const isSyncing = syncing || emailSyncing
 
   return (
     <aside 
@@ -97,9 +101,9 @@ export function Sidebar({ activePage = "home", defaultCollapsed = false, onColla
             O
           </div>
           {!isCollapsed && (
-            <span className="font-display text-lg font-semibold tracking-tight">
+          <span className="font-display text-lg font-semibold tracking-tight">
               Otho
-            </span>
+          </span>
           )}
         </Link>
         {!isCollapsed && (
@@ -165,122 +169,86 @@ export function Sidebar({ activePage = "home", defaultCollapsed = false, onColla
             collapsed={isCollapsed}
           />
         </div>
-        
-        {!isCollapsed && (
-          <>
-            <div className="my-5 border-t" />
-            
-            <p className="mb-3 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Integrations
-            </p>
-            
-            {/* Integration Icons */}
-            <div className="px-3 space-y-2">
-              <button
-                onClick={handleConnectGoogle}
-                disabled={status === "loading"}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs transition-colors ${
-                  session 
-                    ? "bg-green-500/10 border border-green-500/20 text-green-700" 
-                    : "border border-dashed hover:border-primary/50 hover:bg-primary/5 text-muted-foreground"
-                }`}
-                title={session ? "Google Calendar Connected" : "Connect Google Calendar"}
-              >
-                <GoogleCalendarIcon className="h-4 w-4 flex-shrink-0" />
-                <span className="font-medium">Calendar</span>
-                {session && <CheckIcon className="h-3 w-3 ml-auto" />}
-              </button>
-              
-              <button
-                onClick={handleConnectGoogle}
-                disabled={status === "loading"}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs transition-colors ${
-                  session 
-                    ? "bg-green-500/10 border border-green-500/20 text-green-700" 
-                    : "border border-dashed hover:border-primary/50 hover:bg-primary/5 text-muted-foreground"
-                }`}
-                title={session ? "Gmail Connected" : "Connect Gmail"}
-              >
-                <GmailIcon className="h-4 w-4 flex-shrink-0" />
-                <span className="font-medium">Gmail</span>
-                {session && <CheckIcon className="h-3 w-3 ml-auto" />}
-              </button>
-              
-              <button
-                onClick={handleConnectGoogle}
-                disabled={status === "loading"}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs transition-colors ${
-                  session 
-                    ? "bg-green-500/10 border border-green-500/20 text-green-700" 
-                    : "border border-dashed hover:border-primary/50 hover:bg-primary/5 text-muted-foreground"
-                }`}
-                title={session ? "Google Drive Connected" : "Connect Google Drive"}
-              >
-                <GoogleDriveIcon className="h-4 w-4 flex-shrink-0" />
-                <span className="font-medium">Drive</span>
-                {session && <CheckIcon className="h-3 w-3 ml-auto" />}
-              </button>
-            </div>
-            
-            {/* Sync Actions */}
-            {session && (
-              <div className="mt-3 px-3">
-                <div className="flex gap-1">
-                  <button 
-                    onClick={handleSync}
-                    disabled={isSyncing}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-lg border hover:bg-secondary/50"
-                  >
-                    <RefreshIcon className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
-                    {isSyncing ? 'Syncing...' : 'Sync All'}
-                  </button>
-                  <button 
-                    onClick={handleDisconnect}
-                    className="flex items-center justify-center px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-lg border hover:bg-secondary/50"
-                    title="Disconnect Google"
-                  >
-                    <LogOutIcon className="h-3 w-3" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Collapsed integrations */}
-        {isCollapsed && session && (
-          <div className="mt-4 pt-4 border-t flex flex-col items-center space-y-2">
-            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-green-500/10 border border-green-500/20" title="Connected">
-              <GoogleCalendarIcon className="h-4 w-4 text-green-600" />
-            </div>
-            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-green-500/10 border border-green-500/20" title="Connected">
-              <GmailIcon className="h-4 w-4 text-green-600" />
-            </div>
-          </div>
-        )}
       </nav>
 
       {/* Footer */}
       <div className={`border-t flex-shrink-0 ${isCollapsed ? "p-2 flex justify-center" : "p-3"}`}>
-        {session ? (
-          <div className={`flex items-center ${isCollapsed ? "" : "gap-2.5 rounded-lg px-2 py-1.5"}`}>
-            <Avatar className="h-8 w-8 border flex-shrink-0">
-              <AvatarImage src={session.user?.image || undefined} />
+        {user ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={`w-full flex items-center ${isCollapsed ? "justify-center" : "gap-2.5 rounded-lg px-2 py-1.5 hover:bg-secondary/50 transition-colors"}`}>
+                <Avatar className="h-8 w-8 border flex-shrink-0 cursor-pointer">
+                  <AvatarImage src={user.user_metadata?.avatar_url || undefined} />
               <AvatarFallback className="bg-secondary text-xs font-medium">
-                {session.user?.name?.split(' ').map(n => n[0]).join('') || '?'}
+                    {(user.user_metadata?.full_name || user.email || "?")
+                      .split(' ')
+                      .map((n: string) => n[0])
+                      .join('')
+                      .toUpperCase()
+                      .slice(0, 2)}
               </AvatarFallback>
             </Avatar>
-            {!isCollapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium leading-none truncate">
-                  {session.user?.name}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  {session.user?.email}
-                </p>
-              </div>
-            )}
-          </div>
+                {!isCollapsed && (
+                  <div className="flex-1 min-w-0 text-left">
+              <p className="text-sm font-medium leading-none truncate">
+                      {user.user_metadata?.full_name || user.email?.split('@')[0]}
+              </p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {user.email}
+              </p>
+            </div>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align={isCollapsed ? "center" : "end"} side={isCollapsed ? "right" : "top"} className="w-48">
+              <DropdownMenuLabel>Account</DropdownMenuLabel>
+              <DropdownMenuItem asChild>
+                <Link href="/settings" className="cursor-pointer">
+                  <UserIcon className="h-4 w-4 mr-2" />
+                  Account
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings/billing" className="cursor-pointer">
+                  <CreditCardIcon className="h-4 w-4 mr-2" />
+                  Billing
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings/security" className="cursor-pointer">
+                  <ShieldIcon className="h-4 w-4 mr-2" />
+                  Security
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/settings/integrations" className="cursor-pointer">
+                  <PlugIcon className="h-4 w-4 mr-2" />
+                  Integrations
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings/team" className="cursor-pointer">
+                  <TeamIcon className="h-4 w-4 mr-2" />
+                  Team & Org
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings/ai-permissions" className="cursor-pointer">
+                  <SettingsIcon className="h-4 w-4 mr-2" />
+                  AI Permissions
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={signOut}
+                className="cursor-pointer text-destructive focus:text-destructive"
+              >
+                <LogOutIcon className="h-4 w-4 mr-2" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : (
           <div className={`flex items-center ${isCollapsed ? "" : "gap-2.5 rounded-lg px-2 py-1.5"}`}>
             <Avatar className="h-8 w-8 border flex-shrink-0">
@@ -289,14 +257,14 @@ export function Sidebar({ activePage = "home", defaultCollapsed = false, onColla
               </AvatarFallback>
             </Avatar>
             {!isCollapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium leading-none">
-                  Not signed in
-                </p>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  Connect Google to sync
-                </p>
-              </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium leading-none">
+                Not signed in
+              </p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  Sign in to continue
+              </p>
+            </div>
             )}
           </div>
         )}

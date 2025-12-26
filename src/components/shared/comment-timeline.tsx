@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useSession } from "next-auth/react"
+import { useAuth } from "@/lib/hooks/use-auth"
 import { MessageIcon, SendIcon, ArrowRightIcon, CalendarIcon } from "@/components/icons"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -50,7 +50,7 @@ export function CommentTimeline({
   asCard = true,
   entityName = "item",
 }: CommentTimelineProps) {
-  const { data: session } = useSession()
+  const { user } = useAuth()
   const [newComment, setNewComment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -103,7 +103,9 @@ export function CommentTimeline({
         <div className="flex gap-3">
           <Avatar className="h-8 w-8 border">
             <AvatarFallback className="bg-secondary text-xs font-medium">
-              {session?.user?.name ? getInitials(session.user.name) : "?"}
+              {user?.user_metadata?.full_name || user?.email 
+                ? getInitials(user.user_metadata?.full_name || user.email?.split("@")[0] || "?")
+                : "?"}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 flex gap-2">

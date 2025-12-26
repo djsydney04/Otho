@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { useSession } from "next-auth/react"
+import { useAuth } from "./use-auth"
 
 /**
  * Types for Google Drive integration
@@ -70,18 +70,25 @@ interface UseDriveReturn {
  */
 export function useDrive(options: UseDriveOptions = {}): UseDriveReturn {
   const { companyId, founderId, initialAttachments = [] } = options
-  const { data: session } = useSession()
+  const { user } = useAuth()
   
   const [attachments, setAttachments] = useState<DriveAttachment[]>(initialAttachments)
   const [files, setFiles] = useState<DriveFile[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const isConnected = !!session?.accessToken
+  // Check if Google Drive is connected (has access token)
+  // For now, just check if user exists - we'll enhance this later
+  const isConnected = !!user
 
   const searchFiles = useCallback(async (query?: string) => {
-    if (!session?.accessToken) {
-      setError("Please connect your Google account")
+    if (!user) {
+      setError("Please sign in to use Drive")
+      return
+    }
+    
+    if (!isConnected) {
+      setError("Please connect your Google account in Settings")
       return
     }
 
@@ -108,7 +115,7 @@ export function useDrive(options: UseDriveOptions = {}): UseDriveReturn {
     } finally {
       setLoading(false)
     }
-  }, [session?.accessToken])
+  }, [user, isConnected])
 
   const attachFile = useCallback(async (file: DriveFile) => {
     if (!companyId && !founderId) {

@@ -1,75 +1,88 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { createServerClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/server"
 
 // GET /api/comments - List comments (optionally filtered by company)
 export async function GET(request: NextRequest) {
-  const supabase = createServerClient()
+  const supabase = await createClient()
+  
+  // SECURITY: Get current user
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
   
   const { searchParams } = new URL(request.url)
   const companyId = searchParams.get("company_id")
   
-  let query = supabase
-    .from("comments")
-    .select(`
-      *,
-      author:users(*)
-    `)
-    .order("created_at", { ascending: false })
-  
+  // If company_id provided, verify ownership
   if (companyId) {
-    query = query.eq("company_id", companyId)
+    const { data: company } = await supabase
+      .from("companies")
+      .select("owner_id")
+      .eq("id", companyId)
+      .single()
+    
+    if (!company || company.owner_id !== user.id) {
+      return NextResponse.json({ error: "Company not found" }, { status: 404 })
+    }
+    
+    // Company-specific query
+    const { data, error } = await supabase
+      .from("comments")
+      .select(`
+        *,
+        author:users(*)
+      `)
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: false })
+    
+    if (error) {
+      console.error("Error fetching comments:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    
+    return NextResponse.json(data || [])
+  } else {
+    // No company filter - only show comments on user's companies
+    // Get all user's company IDs
+    const { data: userCompanies } = await supabase
+      .from("companies")
+      .select("id")
+      .eq("owner_id", user.id)
+    
+    if (!userCompanies || userCompanies.length === 0) {
+      return NextResponse.json([])
+    }
+    
+    const companyIds = userCompanies.map(c => c.id)
+    
+    const { data, error } = await supabase
+      .from("comments")
+      .select(`
+        *,
+        author:users(*)
+      `)
+      .in("company_id", companyIds)
+      .order("created_at", { ascending: false })
+    
+    if (error) {
+      console.error("Error fetching comments:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    
+    return NextResponse.json(data || [])
   }
-  
-  const { data, error } = await query
-  
-  if (error) {
-    console.error("Error fetching comments:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-  
-  return NextResponse.json(data)
 }
 
 // POST /api/comments - Add a comment
 export async function POST(request: NextRequest) {
-  const supabase = createServerClient()
+  const supabase = await createClient()
   
   try {
-    // Get current user session
-    const session = await getServerSession(authOptions)
-    let author_id: string | null = null
-    
-    // If user is logged in, find or create them in our users table
-    if (session?.user?.email) {
-      const { data: existingUser } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email", session.user.email)
-        .single()
-      
-      if (existingUser) {
-        author_id = existingUser.id
-      } else {
-        // Create the user
-        const { data: newUser } = await supabase
-          .from("users")
-          .insert({
-            email: session.user.email,
-            name: session.user.name || session.user.email,
-            avatar_url: session.user.image,
-            initials: session.user.name
-              ? session.user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
-              : session.user.email.slice(0, 2).toUpperCase(),
-          })
-          .select("id")
-          .single()
-        
-        if (newUser) {
-          author_id = newUser.id
-        }
-      }
+    // SECURITY: Get current user from Supabase Auth
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     
     const body = await request.json()
@@ -82,13 +95,24 @@ export async function POST(request: NextRequest) {
       )
     }
     
+    // SECURITY: Verify company ownership before allowing comment
+    const { data: company } = await supabase
+      .from("companies")
+      .select("owner_id")
+      .eq("id", company_id)
+      .single()
+    
+    if (!company || company.owner_id !== user.id) {
+      return NextResponse.json({ error: "Company not found" }, { status: 404 })
+    }
+    
     const { data: comment, error } = await supabase
       .from("comments")
       .insert({
         company_id,
         content,
         comment_type,
-        author_id,
+        author_id: user.id,
       })
       .select(`
         *,
@@ -101,7 +125,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
     
-    // Update company last_touch
+    // Update company last_touch (only for user comments, not AI comments)
     await supabase
       .from("companies")
       .update({ last_touch: new Date().toISOString() })

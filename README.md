@@ -116,13 +116,13 @@ A modern VC portfolio management platform for angel investors and venture capita
    - See `src/lib/supabase/types.ts` for the full schema
 
 5. **Run the development server**
-   ```bash
-   npm run dev
-   # or
-   yarn dev
-   # or
-   pnpm dev
-   ```
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+```
 
 6. **Open your browser**
    

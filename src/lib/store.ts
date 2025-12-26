@@ -125,12 +125,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const response = await fetch('/api/companies')
-      if (!response.ok) throw new Error('Failed to fetch companies')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const errorMsg = errorData.error || `Failed to fetch companies: ${response.status}`
+        console.error('[Store] Error fetching companies:', errorMsg, errorData)
+        throw new Error(errorMsg)
+      }
       const companies = await response.json()
-      set({ companies, loading: false })
+      console.log(`[Store] Loaded ${companies?.length || 0} companies from API`)
+      if (companies && companies.length > 0) {
+        console.log(`[Store] First 3 company names: ${companies.slice(0, 3).map((c: any) => c.name).join(', ')}`)
+      }
+      set({ companies: companies || [], loading: false })
     } catch (error: any) {
-      console.error('Error fetching companies:', error)
-      set({ error: error.message, loading: false })
+      console.error('[Store] Error fetching companies:', error)
+      set({ error: error.message, loading: false, companies: [] })
     }
   },
   
@@ -138,11 +147,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   fetchTags: async () => {
     try {
       const response = await fetch('/api/tags')
-      if (!response.ok) throw new Error('Failed to fetch tags')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Failed to fetch tags: ${response.status}`)
+      }
       const tags = await response.json()
-      set({ tags })
+      set({ tags: tags || [] })
     } catch (error: any) {
       console.error('Error fetching tags:', error)
+      set({ tags: [] })
     }
   },
   

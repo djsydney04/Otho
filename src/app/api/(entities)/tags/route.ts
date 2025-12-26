@@ -1,13 +1,46 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/server"
 
-// GET /api/tags - List all tags
+// GET /api/tags - List all tags (filtered by tags used in user's companies)
 export async function GET() {
-  const supabase = createServerClient()
+  const supabase = await createClient()
   
+  // SECURITY: Get current user
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+  
+  // Get tags that are actually used by user's companies
+  // This ensures users only see tags relevant to their data
+  const { data: userCompanies } = await supabase
+    .from("companies")
+    .select("id")
+    .eq("owner_id", user.id)
+  
+  if (!userCompanies || userCompanies.length === 0) {
+    return NextResponse.json([])
+  }
+  
+  const companyIds = userCompanies.map(c => c.id)
+  
+  // Get tag IDs used by user's companies
+  const { data: companyTags } = await supabase
+    .from("company_tags")
+    .select("tag_id")
+    .in("company_id", companyIds)
+  
+  if (!companyTags || companyTags.length === 0) {
+    return NextResponse.json([])
+  }
+  
+  const tagIds = [...new Set(companyTags.map(ct => ct.tag_id))]
+  
+  // Fetch the actual tags
   const { data, error } = await supabase
     .from("tags")
     .select("*")
+    .in("id", tagIds)
     .order("label")
   
   if (error) {
@@ -15,12 +48,18 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
   
-  return NextResponse.json(data)
+  return NextResponse.json(data || [])
 }
 
 // POST /api/tags - Create a new tag
 export async function POST(request: NextRequest) {
-  const supabase = createServerClient()
+  const supabase = await createClient()
+  
+  // SECURITY: Verify user is authenticated (tags can be created by any user, but we track who created them)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
   
   try {
     const body = await request.json()

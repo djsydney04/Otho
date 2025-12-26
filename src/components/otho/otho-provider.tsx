@@ -284,7 +284,7 @@ function OthoOverlay() {
                   <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z" />
                 </svg>
               </div>
-              <span>Ask Otho</span>
+            <span>Ask Otho</span>
             </div>
             <kbd className="text-[10px] text-muted-foreground font-normal bg-muted px-1.5 py-0.5 rounded border">⌘K</kbd>
           </DialogTitle>
@@ -317,26 +317,26 @@ function OthoOverlay() {
         
         {/* Input */}
         <div className="space-y-3">
-          <Textarea
+            <Textarea
             placeholder={messages.length === 0 ? "Ask anything about this page or your portfolio..." : "Continue the conversation..."}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            rows={2}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={2}
             className="resize-none bg-background text-sm"
-            autoFocus
-          />
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">
+              autoFocus
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
               {accountContext ? `Context: ${accountContext.contextName || 'This account'}` : 'Using page context'}
-            </span>
-            <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={closeOverlay}>
+              </span>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" onClick={closeOverlay}>
                 Cancel
-              </Button>
-              <Button size="sm" onClick={handleSend} disabled={loading || !input.trim()}>
-                {loading ? "Thinking…" : "Send"}
-              </Button>
+                </Button>
+                <Button size="sm" onClick={handleSend} disabled={loading || !input.trim()}>
+                  {loading ? "Thinking…" : "Send"}
+                </Button>
             </div>
           </div>
         </div>

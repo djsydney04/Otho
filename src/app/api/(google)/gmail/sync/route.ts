@@ -1,32 +1,75 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { fetchEmails, matchEmailsWithFounders, matchEmailToFounder } from "@/lib/integrations/google/gmail"
-import { createServerClient } from "@/lib/supabase/client"
+import { fetchEmails, matchEmailsWithFounders } from "@/lib/integrations/google/gmail"
+import { createClient } from "@/lib/supabase/server"
+
+// Helper to extract email from "Name <email>" format
+function extractEmail(fromHeader: string): string {
+  const match = fromHeader.match(/<([^>]+)>/)
+  return match ? match[1] : fromHeader
+}
 
 // POST /api/gmail/sync - Sync emails with pipeline
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
 
-    if (!session?.accessToken) {
+    if (!user) {
       return NextResponse.json(
         { error: "Not authenticated" },
         { status: 401 }
       )
     }
 
-    const supabase = createServerClient()
+    // Get Google access token from users table
+    const { data: userData } = await supabase
+      .from("users")
+      .select("google_access_token, google_refresh_token, google_token_expires_at")
+      .eq("id", user.id)
+      .single()
 
-    // Get founders from database (including additional emails)
+    if (!userData?.google_access_token) {
+      return NextResponse.json(
+        { error: "Gmail not connected. Please connect your Google account in Settings." },
+        { status: 400 }
+      )
+    }
+
+    // Check if token is expired
+    let accessToken = userData.google_access_token
+    if (userData.google_token_expires_at && new Date(userData.google_token_expires_at) < new Date()) {
+      return NextResponse.json(
+        { error: "Google token expired. Please reconnect your Google account in Settings." },
+        { status: 401 }
+      )
+    }
+
+    // SECURITY: Only get founders and companies owned by this user
+    // Get user's companies first
+    const { data: userCompanies } = await supabase
+      .from("companies")
+      .select("id, name, founder_id")
+      .eq("owner_id", user.id)
+    
+    if (!userCompanies || userCompanies.length === 0) {
+      return NextResponse.json({ error: "No companies found" }, { status: 404 })
+    }
+    
+    // Get founder IDs from user's companies (filter out nulls)
+    const founderIds = [...new Set(userCompanies.map(c => c.founder_id).filter((id): id is string => Boolean(id)))]
+    
+    if (founderIds.length === 0) {
+      return NextResponse.json({ error: "No founders found" }, { status: 404 })
+    }
+    
+    // Get founders from database (only those linked to user's companies)
     const { data: founders } = await supabase
       .from("founders")
       .select("id, name, email, additional_emails")
+      .in("id", founderIds)
     
-    // Get companies from database
-    const { data: companies } = await supabase
-      .from("companies")
-      .select("id, name, founder_id")
+    // Use the user's companies
+    const companies = userCompanies
 
     if (!founders || !companies) {
       return NextResponse.json(
@@ -48,148 +91,94 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Gmail Sync] Found ${founders.length} founders with ${founderByEmail.size} total email addresses`)
 
-    // Get all founder emails for matching
-    const founderEmails = Array.from(founderByEmail.keys())
-
-    // Fetch recent emails (last 30 days)
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    const dateQuery = `after:${thirtyDaysAgo.toISOString().split('T')[0]}`
-
-    const allEmails = await fetchEmails(session.accessToken, {
-      maxResults: 100,
-      q: dateQuery,
+    // Fetch emails from Gmail
+    const emails = await fetchEmails(accessToken, {
+      maxResults: 50,
     })
 
-    console.log(`[Gmail Sync] Fetched ${allEmails.length} emails`)
+    console.log(`[Gmail Sync] Fetched ${emails.length} emails from Gmail`)
 
-    // Match with founders using enhanced matching
-    const matchedEmails = matchEmailsWithFounders(allEmails, founderEmails)
+    // Match emails with founders
+    const matchedEmails = matchEmailsWithFounders(
+      emails,
+      Array.from(founderByEmail.keys())
+    )
 
-    console.log(`[Gmail Sync] Matched ${matchedEmails.length} emails with founders by email address`)
+    console.log(`[Gmail Sync] Matched ${matchedEmails.length} emails with founders`)
 
-    // Also match by name for better coverage
-    const nameMatchedEmails = allEmails.filter(email => {
-      // Skip if already matched by email
-      if (matchedEmails.some(m => m.id === email.id)) return false
-      // Check if any founder name appears in from, to, or subject
-      return founders.some(f => matchEmailToFounder(email, f))
-    })
-
-    console.log(`[Gmail Sync] Found ${nameMatchedEmails.length} additional emails matched by name`)
-
-    const allMatchedEmails = [...matchedEmails, ...nameMatchedEmails]
-
-    // Process and store emails
-    const emailsByCompany: Record<string, any[]> = {}
-    const emailsByFounder: Record<string, any[]> = {}
-    const emailsToUpsert: any[] = []
-
-    allMatchedEmails.forEach((email) => {
-      // Find which founder this email is from/to using enhanced matching (check all emails)
-      let founder = founderByEmail.get(email.fromEmail.toLowerCase())
-      
-      // Check 'to' field for any founder email
-      if (!founder) {
-        const toField = email.to.toLowerCase()
-        for (const [founderEmail, f] of founderByEmail.entries()) {
-          if (toField.includes(founderEmail)) {
-            founder = f
+    // Store email threads in database
+    const threadsToInsert = matchedEmails.map(email => {
+      // Find matching founder by checking fromEmail or to addresses
+      let founder = null
+      if (email.fromEmail && founderByEmail.has(email.fromEmail.toLowerCase())) {
+        founder = founderByEmail.get(email.fromEmail.toLowerCase())
+      } else {
+        // Check to addresses
+        const toAddresses = email.to.split(',').map(e => extractEmail(e.trim()).toLowerCase())
+        for (const toEmail of toAddresses) {
+          if (founderByEmail.has(toEmail)) {
+            founder = founderByEmail.get(toEmail)
             break
           }
         }
       }
       
-      // Fall back to name matching
-      if (!founder) {
-        founder = founders.find(f => matchEmailToFounder(email, f))
-      }
+      const company = founder 
+        ? companies.find(c => c.founder_id === founder.id)
+        : null
 
-      if (founder) {
-        // Track by founder
-        if (!emailsByFounder[founder.id]) {
-          emailsByFounder[founder.id] = []
-        }
-        emailsByFounder[founder.id].push(email)
-
-        // Find company for this founder
-        const company = companies.find((c) => c.founder_id === founder.id)
-        if (company) {
-          if (!emailsByCompany[company.id]) {
-            emailsByCompany[company.id] = []
-          }
-          emailsByCompany[company.id].push(email)
-        }
-
-        // Prepare for database upsert
-        emailsToUpsert.push({
-          gmail_thread_id: email.threadId,
-          gmail_message_id: email.id,
-          founder_id: founder.id,
-          company_id: company?.id || null,
-          subject: email.subject || null,
-          snippet: email.snippet || null,
-          from_name: email.from || null,
-          from_email: email.fromEmail || null,
-          to_email: email.to || null,
-          email_date: email.date || null,
-          labels: email.labels || [],
-        })
+      return {
+        user_id: user.id,
+        company_id: company?.id || null,
+        founder_id: founder?.id || null,
+        subject: email.subject || "No Subject",
+        snippet: email.snippet || null,
+        date: email.date || new Date().toISOString(),
+        gmail_thread_id: email.threadId,
+        gmail_message_id: email.id,
+        from_email: email.fromEmail || null,
+        metadata: email,
       }
     })
 
-    // Upsert emails to database (use gmail_message_id as unique key)
-    if (emailsToUpsert.length > 0) {
-      // Delete existing and insert new (simpler than upsert for this case)
-      for (const emailData of emailsToUpsert) {
-        const { error } = await supabase
-          .from("email_threads")
-          .upsert(emailData, { 
-            onConflict: 'gmail_thread_id',
-            ignoreDuplicates: false 
-          })
-        
-        if (error && error.code !== '23505') { // Ignore duplicate key errors
-          console.error("Error upserting email:", error)
-        }
+    if (threadsToInsert.length > 0) {
+      // Upsert email threads
+      const { error: insertError } = await supabase
+        .from("email_threads")
+        .upsert(threadsToInsert, {
+          onConflict: "gmail_thread_id,user_id",
+        })
+
+      if (insertError) {
+        console.error("[Gmail Sync] Error inserting threads:", insertError)
+        return NextResponse.json(
+          { error: "Failed to save emails", details: insertError.message },
+          { status: 500 }
+        )
       }
     }
 
-    // Calculate last email for each company
-    const lastEmailByCompany: Record<string, string> = {}
-    Object.entries(emailsByCompany).forEach(([companyId, emails]) => {
-      const sorted = emails.sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      )
-      if (sorted[0]) {
-        lastEmailByCompany[companyId] = sorted[0].date
-      }
-    })
-
-    // Calculate last email for each founder
-    const lastEmailByFounder: Record<string, string> = {}
-    Object.entries(emailsByFounder).forEach(([founderId, emails]) => {
-      const sorted = emails.sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      )
-      if (sorted[0]) {
-        lastEmailByFounder[founderId] = sorted[0].date
-      }
-    })
+    // Update last sync time in integrations table
+    await supabase
+      .from("integrations")
+      .upsert({
+        user_id: user.id,
+        provider: "gmail",
+        enabled: true,
+        synced_at: new Date().toISOString(),
+      }, {
+        onConflict: "user_id,provider"
+      })
 
     return NextResponse.json({
       success: true,
       syncedAt: new Date().toISOString(),
-      totalEmails: allEmails.length,
-      matchedEmails: allMatchedEmails.length,
-      emailsByCompany,
-      emailsByFounder,
-      lastEmailByCompany,
-      lastEmailByFounder,
-      storedEmails: emailsToUpsert.length,
+      totalEmails: emails.length,
+      matchedEmails: matchedEmails.length,
+      savedThreads: threadsToInsert.length,
     })
   } catch (error: any) {
-    console.error("Gmail sync error:", error)
+    console.error("[Gmail Sync] Error:", error)
     return NextResponse.json(
       { error: error.message || "Failed to sync emails" },
       { status: 500 }

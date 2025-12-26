@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -18,7 +17,7 @@ import {
   TwitterIcon,
   LinkedInIcon,
 } from "@/components/icons"
-import { MeetingList, EmailList, CommentTimeline, DrivePicker } from "@/components/shared"
+import { MeetingList, EmailList, CommentTimeline, DrivePicker, OthoReport } from "@/components/shared"
 import { AccountChat } from "@/components/otho/account-chat"
 import { formatRelative, syncCalendar, syncEmails, useAppStore } from "@/lib/store"
 import { formatDate, getTwitterUrl, getLinkedInUrl, getTwitterHandle } from "@/lib/utils"
@@ -53,7 +52,6 @@ export default function FounderDetailPage() {
   const params = useParams()
   const router = useRouter()
   const founderId = params.id as string
-  const { data: session } = useSession()
   const { syncing, emailSyncing } = useAppStore()
 
   // State
@@ -147,6 +145,12 @@ export default function FounderDetailPage() {
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Left Column - Details & Activity */}
           <div className="lg:col-span-2 space-y-8">
+            {/* Otho Report */}
+            <OthoReport 
+              founderId={founder.id} 
+              name={founder.name}
+            />
+
             {/* Background Info */}
             <BackgroundSection founder={founder} />
 
@@ -180,6 +184,9 @@ export default function FounderDetailPage() {
 
           {/* Right Column - Sidebar */}
           <div className="space-y-6">
+            {/* Otho Chat - Moved to top */}
+            <AccountChat founderId={founder.id} contextName={founder.name} />
+
             {/* Companies */}
             <CompaniesCard companies={companies} founder={founder} />
 
@@ -194,9 +201,6 @@ export default function FounderDetailPage() {
               founderId={founder.id}
               initialAttachments={(founder as any).drive_documents || []}
             />
-
-            {/* Otho Chat */}
-            <AccountChat founderId={founder.id} contextName={founder.name} />
 
             {/* Timeline */}
             <TimelineCard founder={founder} />
@@ -242,37 +246,41 @@ function FounderHeader({
         )}
 
         {/* Quick Links */}
-        <div className="mt-4 flex flex-wrap items-center gap-4">
-          <a
-            href={`mailto:${founder.email}`}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground smooth"
-          >
-            <MailIcon className="h-4 w-4" />
-            {founder.email}
-          </a>
-          {founder.linkedin && (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <span className="text-sm text-muted-foreground">{founder.email}</span>
+          <div className="flex items-center gap-1.5">
             <a
-              href={getLinkedInUrl(founder.linkedin)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground smooth"
+              href={`mailto:${founder.email}`}
+              className="flex items-center justify-center h-8 w-8 rounded-lg border bg-background hover:bg-secondary transition-colors"
+              title="Email"
             >
-              <LinkedInIcon className="h-4 w-4" />
-              LinkedIn
+              <MailIcon className="h-3.5 w-3.5 text-muted-foreground" />
             </a>
-          )}
-          {founder.twitter && (
-            <a
-              href={getTwitterUrl(founder.twitter)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground smooth"
-            >
-              <TwitterIcon className="h-4 w-4" />@{getTwitterHandle(founder.twitter)}
-            </a>
-          )}
+            {founder.linkedin && (
+              <a
+                href={getLinkedInUrl(founder.linkedin)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center h-8 w-8 rounded-lg border bg-background hover:bg-secondary transition-colors"
+                title="LinkedIn"
+              >
+                <LinkedInIcon className="h-3.5 w-3.5 text-[#0A66C2]" />
+              </a>
+            )}
+            {founder.twitter && (
+              <a
+                href={getTwitterUrl(founder.twitter)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center h-8 w-8 rounded-lg border bg-background hover:bg-secondary transition-colors"
+                title="Twitter/X"
+              >
+                <TwitterIcon className="h-3.5 w-3.5" />
+              </a>
+            )}
+          </div>
           {founder.location && (
-            <span className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="flex items-center gap-2 text-sm text-muted-foreground ml-auto">
               <MapPinIcon className="h-4 w-4" />
               {founder.location}
             </span>
@@ -310,15 +318,40 @@ function FounderHeader({
         )}
       </div>
 
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm" asChild>
-          <a href={`mailto:${founder.email}`}>
-            <MailIcon className="h-4 w-4 mr-1.5" />
-            Email
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <a
+            href={`mailto:${founder.email}`}
+            className="flex items-center justify-center h-9 w-9 rounded-lg border bg-background hover:bg-secondary transition-colors"
+            title="Email"
+          >
+            <MailIcon className="h-4 w-4 text-muted-foreground" />
           </a>
-        </Button>
+          {founder.linkedin && (
+            <a
+              href={getLinkedInUrl(founder.linkedin)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center h-9 w-9 rounded-lg border bg-background hover:bg-secondary transition-colors"
+              title="LinkedIn"
+            >
+              <LinkedInIcon className="h-4 w-4 text-[#0A66C2]" />
+            </a>
+          )}
+          {founder.twitter && (
+            <a
+              href={getTwitterUrl(founder.twitter)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center h-9 w-9 rounded-lg border bg-background hover:bg-secondary transition-colors"
+              title="Twitter/X"
+            >
+              <TwitterIcon className="h-4 w-4" />
+            </a>
+          )}
+        </div>
         {companies.length === 0 && (
-          <Button size="sm" asChild>
+          <Button size="sm" asChild className="ml-auto">
             <Link
               href={`/add-company?founder_id=${founder.id}&founder_name=${encodeURIComponent(founder.name)}&founder_email=${encodeURIComponent(founder.email)}`}
             >

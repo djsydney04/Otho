@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react"
 import Link from "next/link"
-import { useSession } from "next-auth/react"
+import { useAuth } from "@/lib/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -33,7 +33,7 @@ import {
 import { useAppStore, syncCalendar, syncEmails, STAGES, type Stage } from "@/lib/store"
 
 export default function PipelinePage() {
-  const { data: session } = useSession()
+  const { user } = useAuth()
   const { companies, tags, loading, lastSyncTime, initialize } = useAppStore()
   
   const [search, setSearch] = useState("")
@@ -43,12 +43,14 @@ export default function PipelinePage() {
     initialize()
   }, [initialize])
   
+  // Sync calendar and emails when user is available and hasn't synced yet
   useEffect(() => {
-    if (session?.accessToken && !lastSyncTime) {
+    if (user && !lastSyncTime) {
+      // Sync will be handled by API routes which fetch tokens from database
       syncCalendar()
       syncEmails()
     }
-  }, [session?.accessToken, lastSyncTime])
+  }, [user, lastSyncTime])
 
   const companiesWithJoins = useMemo(() => {
     return companies.map((company) => ({

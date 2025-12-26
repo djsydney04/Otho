@@ -1,19 +1,48 @@
 import { NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/server"
 
 // GET - Fetch chat history
 export async function GET(request: Request) {
   try {
+    const supabase = await createClient()
+    
+    // SECURITY: Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    
     const { searchParams } = new URL(request.url)
     const companyId = searchParams.get("companyId")
     const founderId = searchParams.get("founderId")
     const conversationId = searchParams.get("conversationId")
     const limit = parseInt(searchParams.get("limit") || "10")
 
-    const supabase = createServerClient()
-
     // If specific conversation requested
     if (conversationId) {
+      // Verify conversation belongs to user
+      const { data: conv } = await supabase
+        .from("chat_conversations")
+        .select("user_id, company_id, founder_id")
+        .eq("id", conversationId)
+        .single()
+      
+      if (!conv || conv.user_id !== user.id) {
+        return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
+      }
+      
+      // If linked to company/founder, verify ownership
+      if (conv.company_id) {
+        const { data: company } = await supabase
+          .from("companies")
+          .select("owner_id")
+          .eq("id", conv.company_id)
+          .single()
+        if (!company || company.owner_id !== user.id) {
+          return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
+        }
+      }
+      
       const { data: messages, error } = await supabase
         .from("chat_messages")
         .select("*")
@@ -24,19 +53,39 @@ export async function GET(request: Request) {
       return NextResponse.json({ messages })
     }
 
-    // Otherwise fetch recent conversations
+    // SECURITY: Only fetch conversations for the current user
     let query = supabase
       .from("chat_conversations")
       .select(`
         *,
         messages:chat_messages(id, role, content, created_at)
       `)
+      .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(limit)
 
     if (companyId) {
+      // Verify company ownership
+      const { data: company } = await supabase
+        .from("companies")
+        .select("owner_id")
+        .eq("id", companyId)
+        .single()
+      if (!company || company.owner_id !== user.id) {
+        return NextResponse.json({ error: "Company not found" }, { status: 404 })
+      }
       query = query.eq("company_id", companyId)
     } else if (founderId) {
+      // Verify founder access (founder must be linked to user's companies)
+      const { data: userCompanies } = await supabase
+        .from("companies")
+        .select("founder_id")
+        .eq("owner_id", user.id)
+        .eq("founder_id", founderId)
+        .limit(1)
+      if (!userCompanies || userCompanies.length === 0) {
+        return NextResponse.json({ error: "Founder not found" }, { status: 404 })
+      }
       query = query.eq("founder_id", founderId)
     }
 
@@ -53,9 +102,40 @@ export async function GET(request: Request) {
 // POST - Create or update conversation
 export async function POST(request: Request) {
   try {
+    const supabase = await createClient()
+    
+    // SECURITY: Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    
     const { conversationId, companyId, founderId, message, title } = await request.json()
 
-    const supabase = createServerClient()
+    // Verify ownership if company/founder provided
+    if (companyId) {
+      const { data: company } = await supabase
+        .from("companies")
+        .select("owner_id")
+        .eq("id", companyId)
+        .single()
+      if (!company || company.owner_id !== user.id) {
+        return NextResponse.json({ error: "Company not found" }, { status: 404 })
+      }
+    }
+    
+    if (founderId) {
+      const { data: userCompanies } = await supabase
+        .from("companies")
+        .select("founder_id")
+        .eq("owner_id", user.id)
+        .eq("founder_id", founderId)
+        .limit(1)
+      if (!userCompanies || userCompanies.length === 0) {
+        return NextResponse.json({ error: "Founder not found" }, { status: 404 })
+      }
+    }
+
     let convId = conversationId
 
     // Create new conversation if needed
@@ -63,6 +143,7 @@ export async function POST(request: Request) {
       const { data: conv, error: convError } = await supabase
         .from("chat_conversations")
         .insert({
+          user_id: user.id,
           company_id: companyId || null,
           founder_id: founderId || null,
           title: title || message?.content?.slice(0, 50) || "New conversation",
@@ -72,6 +153,16 @@ export async function POST(request: Request) {
 
       if (convError) throw convError
       convId = conv.id
+    } else {
+      // Verify existing conversation belongs to user
+      const { data: existingConv } = await supabase
+        .from("chat_conversations")
+        .select("user_id")
+        .eq("id", convId)
+        .single()
+      if (!existingConv || existingConv.user_id !== user.id) {
+        return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
+      }
     }
 
     // Add message if provided

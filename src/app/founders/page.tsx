@@ -22,12 +22,14 @@ import { useAppStore, formatRelative } from "@/lib/store"
 
 export default function FoundersPage() {
   const router = useRouter()
-  const { founders, companies, loading, initialize } = useAppStore()
+  const { founders, companies, loading, fetchFounders, fetchCompanies } = useAppStore()
   const [search, setSearch] = useState("")
   
+  // Always fetch fresh data when the page loads
   useEffect(() => {
-    initialize()
-  }, [initialize])
+    fetchFounders()
+    fetchCompanies()
+  }, [fetchFounders, fetchCompanies])
   
   // Enrich founders with company info
   const enrichedFounders = useMemo(() => {

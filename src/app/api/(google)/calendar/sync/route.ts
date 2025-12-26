@@ -1,32 +1,71 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { listEvents, matchEventsWithFounders, matchEventToFounder } from "@/lib/integrations/google/calendar"
-import { createServerClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/server"
 
 // POST /api/calendar/sync - Sync calendar and match with pipeline
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
 
-    if (!session?.accessToken) {
+    if (!user) {
       return NextResponse.json(
         { error: "Not authenticated" },
         { status: 401 }
       )
     }
 
-    const supabase = createServerClient()
+    // Get Google access token from users table
+    const { data: userData } = await supabase
+      .from("users")
+      .select("google_access_token, google_refresh_token, google_token_expires_at")
+      .eq("id", user.id)
+      .single()
 
-    // Get founders from database (including additional emails)
+    if (!userData?.google_access_token) {
+      return NextResponse.json(
+        { error: "Google Calendar not connected. Please connect your Google account in Settings." },
+        { status: 400 }
+      )
+    }
+
+    // Check if token is expired and refresh if needed
+    let accessToken = userData.google_access_token
+    if (userData.google_token_expires_at && new Date(userData.google_token_expires_at) < new Date()) {
+      // Token expired - would need to refresh using refresh_token
+      // For now, return error asking user to reconnect
+      return NextResponse.json(
+        { error: "Google token expired. Please reconnect your Google account in Settings." },
+        { status: 401 }
+      )
+    }
+
+    // SECURITY: Only get founders and companies owned by this user
+    // Get user's companies first
+    const { data: userCompanies } = await supabase
+      .from("companies")
+      .select("id, name, founder_id")
+      .eq("owner_id", user.id)
+    
+    if (!userCompanies || userCompanies.length === 0) {
+      return NextResponse.json({ error: "No companies found" }, { status: 404 })
+    }
+    
+    // Get founder IDs from user's companies (filter out nulls)
+    const founderIds = [...new Set(userCompanies.map(c => c.founder_id).filter((id): id is string => Boolean(id)))]
+    
+    if (founderIds.length === 0) {
+      return NextResponse.json({ error: "No founders found" }, { status: 404 })
+    }
+    
+    // Get founders from database (only those linked to user's companies)
     const { data: founders } = await supabase
       .from("founders")
       .select("id, name, email, additional_emails")
+      .in("id", founderIds)
     
-    // Get companies from database
-    const { data: companies } = await supabase
-      .from("companies")
-      .select("id, name, founder_id")
+    // Use the user's companies
+    const companies = userCompanies
 
     if (!founders || !companies) {
       return NextResponse.json(
@@ -52,129 +91,101 @@ export async function POST(request: NextRequest) {
     const now = new Date()
     const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
-    const events = await listEvents(session.accessToken, {
+    const events = await listEvents(accessToken, {
       timeMin: threeMonthsAgo.toISOString(),
       timeMax: now.toISOString(),
       maxResults: 250,
     })
 
-    console.log(`[Calendar Sync] Fetched ${events.length} calendar events`)
+    console.log(`[Calendar Sync] Fetched ${events.length} events from Google Calendar`)
 
-    // Match events with founders using enhanced matching (including all emails)
-    const allFounderEmails = Array.from(emailToFounder.keys())
-    const founderNames = founders.map((f) => f.name)
-    const matchedEvents = matchEventsWithFounders(events, allFounderEmails, founderNames)
+    // Match events with founders
+    const matchedEvents = matchEventsWithFounders(
+      events,
+      Array.from(emailToFounder.keys()),
+      founders.map(f => f.name || "").filter(Boolean)
+    )
 
     console.log(`[Calendar Sync] Matched ${matchedEvents.length} events with founders`)
 
-    // Process and store events
-    const eventsByCompany: Record<string, any[]> = {}
-    const eventsByFounder: Record<string, any[]> = {}
-    const eventsToUpsert: any[] = []
-
-    matchedEvents.forEach((event) => {
-      // Find which founder this event is with using enhanced matching (check all emails)
-      let matchedFounder = null
-      
-      // First check by attendee email (most reliable)
-      for (const attendee of event.attendees || []) {
-        const email = attendee.email?.toLowerCase()
-        if (email && emailToFounder.has(email)) {
-          matchedFounder = emailToFounder.get(email)
-          break
-        }
-      }
-      
-      // Fall back to name matching
-      if (!matchedFounder) {
-        matchedFounder = founders.find((founder) => matchEventToFounder(event, founder))
-      }
-
-      if (matchedFounder) {
-        // Track by founder
-        if (!eventsByFounder[matchedFounder.id]) {
-          eventsByFounder[matchedFounder.id] = []
-        }
-        eventsByFounder[matchedFounder.id].push(event)
-
-        // Find the company for this founder
-        const company = companies.find((c) => c.founder_id === matchedFounder.id)
-        if (company) {
-          if (!eventsByCompany[company.id]) {
-            eventsByCompany[company.id] = []
+    // Store calendar events in database
+    const eventsToInsert = matchedEvents
+      .map(event => {
+        // Find matching founder by checking attendees
+        let founder = null
+        if (event.attendees) {
+          for (const attendee of event.attendees) {
+            const email = attendee.email?.toLowerCase()
+            if (email && emailToFounder.has(email)) {
+              founder = emailToFounder.get(email)
+              break
+            }
           }
-          eventsByCompany[company.id].push(event)
         }
+        
+        const company = founder 
+          ? companies.find(c => c.founder_id === founder.id)
+          : null
 
-        // Prepare for database upsert
-        eventsToUpsert.push({
-          google_event_id: event.id,
-          founder_id: matchedFounder.id,
+        const startTime = event.start?.dateTime || event.start?.date
+        const endTime = event.end?.dateTime || event.end?.date || startTime
+        
+        // Skip events without valid times
+        if (!startTime || !endTime) return null
+        
+        return {
+          user_id: user.id,
           company_id: company?.id || null,
-          title: event.summary || 'Untitled',
+          founder_id: founder?.id || null,
+          title: event.summary || "Untitled Event",
           description: event.description || null,
-          start_time: event.start?.dateTime || event.start?.date,
-          end_time: event.end?.dateTime || event.end?.date,
-          attendees: event.attendees || [],
-          html_link: event.htmlLink || null,
-          meet_link: event.hangoutLink || null,
-        })
-      }
-    })
+          start_time: startTime,
+          end_time: endTime,
+          location: event.location || null,
+          google_event_id: event.id || undefined,
+          metadata: event as any,
+        }
+      })
+      .filter((e): e is NonNullable<typeof e> => e !== null) // Remove null entries with type guard
 
-    // Upsert events to database
-    if (eventsToUpsert.length > 0) {
-      const { error: upsertError } = await supabase
+    if (eventsToInsert.length > 0) {
+      // Upsert events (update if exists, insert if not)
+      const { error: insertError } = await supabase
         .from("calendar_events")
-        .upsert(eventsToUpsert, { 
-          onConflict: 'google_event_id',
-          ignoreDuplicates: false 
+        .upsert(eventsToInsert, {
+          onConflict: "google_event_id,user_id",
         })
-      
-      if (upsertError) {
-        console.error("Error upserting events:", upsertError)
+
+      if (insertError) {
+        console.error("[Calendar Sync] Error inserting events:", insertError)
+        return NextResponse.json(
+          { error: "Failed to save events", details: insertError.message },
+          { status: 500 }
+        )
       }
     }
 
-    // Calculate last contact for each company
-    const lastContactByCompany: Record<string, string> = {}
-    Object.entries(eventsByCompany).forEach(([companyId, companyEvents]) => {
-      const sorted = companyEvents.sort((a, b) => {
-        const dateA = new Date(a.start?.dateTime || a.start?.date || 0).getTime()
-        const dateB = new Date(b.start?.dateTime || b.start?.date || 0).getTime()
-        return dateB - dateA
+    // Update last sync time in integrations table
+    await supabase
+      .from("integrations")
+      .upsert({
+        user_id: user.id,
+        provider: "google_calendar",
+        enabled: true,
+        synced_at: new Date().toISOString(),
+      }, {
+        onConflict: "user_id,provider"
       })
-      if (sorted[0]) {
-        lastContactByCompany[companyId] = sorted[0].start?.dateTime || sorted[0].start?.date || ""
-      }
-    })
-
-    // Calculate last contact for each founder
-    const lastContactByFounder: Record<string, string> = {}
-    Object.entries(eventsByFounder).forEach(([founderId, founderEvents]) => {
-      const sorted = founderEvents.sort((a, b) => {
-        const dateA = new Date(a.start?.dateTime || a.start?.date || 0).getTime()
-        const dateB = new Date(b.start?.dateTime || b.start?.date || 0).getTime()
-        return dateB - dateA
-      })
-      if (sorted[0]) {
-        lastContactByFounder[founderId] = sorted[0].start?.dateTime || sorted[0].start?.date || ""
-      }
-    })
 
     return NextResponse.json({
       success: true,
       syncedAt: new Date().toISOString(),
       totalEvents: events.length,
       matchedEvents: matchedEvents.length,
-      eventsByCompany,
-      eventsByFounder,
-      lastContactByCompany,
-      lastContactByFounder,
-      storedEvents: eventsToUpsert.length,
+      savedEvents: eventsToInsert.length,
     })
   } catch (error: any) {
-    console.error("Calendar sync error:", error)
+    console.error("[Calendar Sync] Error:", error)
     return NextResponse.json(
       { error: error.message || "Failed to sync calendar" },
       { status: 500 }

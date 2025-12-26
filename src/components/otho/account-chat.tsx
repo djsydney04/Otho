@@ -4,12 +4,14 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAppStore } from "@/lib/store"
+import { CompanyReferenceCard } from "@/components/shared/company-reference-card"
 
 interface ChatMessage {
   id?: string
   role: "user" | "assistant"
   content: string
   proposedAction?: any
+  companyReferences?: Array<{companyId: string; companyName: string; reason: string}>
 }
 
 interface AccountChatProps {
@@ -18,8 +20,11 @@ interface AccountChatProps {
   contextName: string
 }
 
-// Simple markdown formatter
+// Simple markdown formatter - replaces asterisks with bullet points
 function FormattedMessage({ content }: { content: string }) {
+  // Replace asterisk bullet points with proper bullets
+  let formattedContent = content.replace(/^\s*\*\s+/gm, '• ')
+  
   const formatInline = (text: string): React.ReactNode => {
     const parts: React.ReactNode[] = []
     let lastIndex = 0
@@ -54,20 +59,21 @@ function FormattedMessage({ content }: { content: string }) {
     return parts.length === 0 ? text : parts.length === 1 ? parts[0] : <>{parts}</>
   }
 
-  const lines = content.split('\n')
+  const lines = formattedContent.split('\n')
   return (
-    <div className="space-y-1">
+    <div className="space-y-1 text-xs leading-relaxed">
       {lines.map((line, idx) => {
         if (line.trim() === '') return <div key={idx} className="h-1" />
         if (line.match(/^[-•]\s/)) {
+          const content = line.slice(2)
           return (
-            <div key={idx} className="flex gap-2 ml-1">
-              <span className="text-primary/60">•</span>
-              <span className="flex-1">{formatInline(line.slice(2))}</span>
+            <div key={idx} className="flex gap-2">
+              <span className="text-primary/60 text-xs flex-shrink-0">•</span>
+              <span className="flex-1">{formatInline(content)}</span>
             </div>
           )
         }
-        return <p key={idx}>{formatInline(line)}</p>
+        return <p key={idx} className="leading-relaxed">{formatInline(line)}</p>
       })}
     </div>
   )
@@ -79,7 +85,7 @@ export function AccountChat({ companyId, founderId, contextName }: AccountChatPr
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(true)
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(true)
   const [conversationId, setConversationId] = useState<string | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
@@ -108,7 +114,8 @@ export function AccountChat({ companyId, founderId, contextName }: AccountChatPr
               id: m.id,
               role: m.role as "user" | "assistant",
               content: m.content,
-              proposedAction: m.proposed_action
+              proposedAction: m.proposed_action,
+              companyReferences: m.company_references
             })))
           }
         }
@@ -146,9 +153,13 @@ export function AccountChat({ companyId, founderId, contextName }: AccountChatPr
       const response = await fetch("/api/chat/groq", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages, pageContext }),
+        body: JSON.stringify({ 
+          messages: apiMessages, 
+          pageContext,
+          companyId,
+          founderId,
+        }),
       })
-      
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Failed to chat")
 
@@ -156,12 +167,18 @@ export function AccountChat({ companyId, founderId, contextName }: AccountChatPr
       const assistantMsg: ChatMessage = {
         role: "assistant",
         content: replyContent,
-        proposedAction: data.proposedAction
+        proposedAction: data.proposedAction,
+        companyReferences: data.companyReferences
       }
 
       setMessages(prev => [...prev, assistantMsg])
-
-      // Save to history
+      
+      // Handle company references - refresh page to show updated data if actions were taken
+      if (data.proposedAction?.tool?.startsWith('update_')) {
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
+      }
       try {
         const saveRes = await fetch("/api/chat/history", {
           method: "POST",
@@ -258,23 +275,50 @@ export function AccountChat({ companyId, founderId, contextName }: AccountChatPr
               </p>
             ) : (
               messages.map((msg, idx) => (
-                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] rounded-xl px-3 py-2 text-xs ${
-                    msg.role === 'user' 
-                      ? 'bg-primary text-primary-foreground' 
-                      : 'bg-secondary/50 text-foreground'
-                  }`}>
-                    {msg.role === 'user' ? msg.content : <FormattedMessage content={msg.content} />}
+                <div key={idx} className="space-y-2">
+                  <div className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                    <div className={`flex-1 max-w-[80%] ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+                      <div className={`inline-block text-xs leading-relaxed px-2.5 py-1.5 rounded ${
+                        msg.role === 'user' 
+                          ? 'bg-primary/10 text-foreground' 
+                          : 'text-muted-foreground'
+                      }`}>
+                        {msg.role === 'user' ? (
+                          <span>{msg.content}</span>
+                        ) : (
+                          <FormattedMessage content={msg.content} />
+                        )}
+                      </div>
+                    </div>
                   </div>
+                  {/* Company References */}
+                  {msg.companyReferences && msg.companyReferences.length > 0 && (
+                    <div className="flex gap-2 flex-row">
+                      <div className="flex-1 max-w-[80%] space-y-2">
+                        {msg.companyReferences.map((ref, refIdx) => (
+                          <CompanyReferenceCard
+                            key={refIdx}
+                            companyId={ref.companyId}
+                            companyName={ref.companyName}
+                            reason={ref.reason}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))
             )}
             {loading && (
-              <div className="flex justify-start">
-                <div className="bg-secondary/50 rounded-xl px-3 py-2 flex gap-1.5">
-                  <div className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-bounce" />
-                  <div className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.15s]" />
-                  <div className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.3s]" />
+              <div className="flex gap-2 flex-row">
+                <div className="flex-1 max-w-[80%] text-left">
+                  <div className="inline-block text-xs px-2.5 py-1.5 rounded text-muted-foreground">
+                    <div className="flex gap-1.5">
+                      <div className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-bounce" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.15s]" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.3s]" />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
