@@ -213,6 +213,8 @@ export type Database = {
       }
       companies: {
         Row: {
+          ai_analysis: string | null
+          ai_analysis_updated_at: string | null
           created_at: string
           description: string | null
           followup_date: string | null
@@ -233,6 +235,8 @@ export type Database = {
           website: string | null
         }
         Insert: {
+          ai_analysis?: string | null
+          ai_analysis_updated_at?: string | null
           created_at?: string
           description?: string | null
           followup_date?: string | null
@@ -253,6 +257,8 @@ export type Database = {
           website?: string | null
         }
         Update: {
+          ai_analysis?: string | null
+          ai_analysis_updated_at?: string | null
           created_at?: string
           description?: string | null
           followup_date?: string | null
@@ -743,6 +749,126 @@ export type Database = {
         }
         Relationships: []
       }
+      news_articles: {
+        Row: {
+          id: string
+          external_id: string | null
+          title: string
+          url: string
+          source_name: string | null
+          source_url: string | null
+          author: string | null
+          description: string | null
+          content: string | null
+          image_url: string | null
+          published_at: string | null
+          category: string | null
+          relevance_score: number | null
+          company_id: string | null
+          is_portfolio_relevant: boolean | null
+          metadata: Json | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          external_id?: string | null
+          title: string
+          url: string
+          source_name?: string | null
+          source_url?: string | null
+          author?: string | null
+          description?: string | null
+          content?: string | null
+          image_url?: string | null
+          published_at?: string | null
+          category?: string | null
+          relevance_score?: number | null
+          company_id?: string | null
+          is_portfolio_relevant?: boolean | null
+          metadata?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          external_id?: string | null
+          title?: string
+          url?: string
+          source_name?: string | null
+          source_url?: string | null
+          author?: string | null
+          description?: string | null
+          content?: string | null
+          image_url?: string | null
+          published_at?: string | null
+          category?: string | null
+          relevance_score?: number | null
+          company_id?: string | null
+          is_portfolio_relevant?: boolean | null
+          metadata?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      news_categories: {
+        Row: {
+          id: string
+          slug: string
+          label: string
+          description: string | null
+          icon: string | null
+          sort_order: number | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          slug: string
+          label: string
+          description?: string | null
+          icon?: string | null
+          sort_order?: number | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          slug?: string
+          label?: string
+          description?: string | null
+          icon?: string | null
+          sort_order?: number | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      user_interests: {
+        Row: {
+          id: string
+          user_id: string | null
+          category: string
+          enabled: boolean | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          category: string
+          enabled?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          category?: string
+          enabled?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           avatar_url: string | null
@@ -758,6 +884,32 @@ export type Database = {
           notion_workspace_id: string | null
           notion_workspace_name: string | null
           updated_at: string
+          // Onboarding: Section A - Basics
+          role: string | null
+          user_location: string | null
+          signup_source: string | null
+          primary_goals: string[] | null
+          // Onboarding: Section B - Investing Context
+          actively_investing: string | null
+          invested_before: boolean | null
+          check_size: string | null
+          deals_per_year: string | null
+          stage_focus: string[] | null
+          sector_focus: string[] | null
+          geo_focus: string[] | null
+          // Onboarding: Section C - Decision Style
+          decision_factors: string[] | null
+          decision_speed: string | null
+          sourcing_channels: string[] | null
+          biggest_pain: string | null
+          // Onboarding: Section D - Preferences
+          discover_topics: string[] | null
+          ai_help_focus: string[] | null
+          ai_tone: string | null
+          // Onboarding status
+          onboarding_status: string | null
+          onboarding_step: number | null
+          onboarding_completed_at: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -773,6 +925,28 @@ export type Database = {
           notion_workspace_id?: string | null
           notion_workspace_name?: string | null
           updated_at?: string
+          // Onboarding fields
+          role?: string | null
+          user_location?: string | null
+          signup_source?: string | null
+          primary_goals?: string[] | null
+          actively_investing?: string | null
+          invested_before?: boolean | null
+          check_size?: string | null
+          deals_per_year?: string | null
+          stage_focus?: string[] | null
+          sector_focus?: string[] | null
+          geo_focus?: string[] | null
+          decision_factors?: string[] | null
+          decision_speed?: string | null
+          sourcing_channels?: string[] | null
+          biggest_pain?: string | null
+          discover_topics?: string[] | null
+          ai_help_focus?: string[] | null
+          ai_tone?: string | null
+          onboarding_status?: string | null
+          onboarding_step?: number | null
+          onboarding_completed_at?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -788,6 +962,256 @@ export type Database = {
           notion_workspace_id?: string | null
           notion_workspace_name?: string | null
           updated_at?: string
+          // Onboarding fields
+          role?: string | null
+          user_location?: string | null
+          signup_source?: string | null
+          primary_goals?: string[] | null
+          actively_investing?: string | null
+          invested_before?: boolean | null
+          check_size?: string | null
+          deals_per_year?: string | null
+          stage_focus?: string[] | null
+          sector_focus?: string[] | null
+          geo_focus?: string[] | null
+          decision_factors?: string[] | null
+          decision_speed?: string | null
+          sourcing_channels?: string[] | null
+          biggest_pain?: string | null
+          discover_topics?: string[] | null
+          ai_help_focus?: string[] | null
+          ai_tone?: string | null
+          onboarding_status?: string | null
+          onboarding_step?: number | null
+          onboarding_completed_at?: string | null
+        }
+        Relationships: []
+      }
+      user_preferences: {
+        Row: {
+          id: string
+          user_id: string
+          timezone: string | null
+          language: string | null
+          date_format: string | null
+          theme: string | null
+          email_notifications: boolean | null
+          push_notifications: boolean | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          timezone?: string | null
+          language?: string | null
+          date_format?: string | null
+          theme?: string | null
+          email_notifications?: boolean | null
+          push_notifications?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          timezone?: string | null
+          language?: string | null
+          date_format?: string | null
+          theme?: string | null
+          email_notifications?: boolean | null
+          push_notifications?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      billing_info: {
+        Row: {
+          id: string
+          user_id: string
+          plan: string | null
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_status: string | null
+          current_period_start: string | null
+          current_period_end: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          plan?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string | null
+          current_period_start?: string | null
+          current_period_end?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          plan?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string | null
+          current_period_start?: string | null
+          current_period_end?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      security_settings: {
+        Row: {
+          id: string
+          user_id: string
+          two_factor_enabled: boolean | null
+          two_factor_secret: string | null
+          backup_codes: string[] | null
+          last_password_change: string | null
+          active_sessions: any | null
+          login_alerts: boolean | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          two_factor_enabled?: boolean | null
+          two_factor_secret?: string | null
+          backup_codes?: string[] | null
+          last_password_change?: string | null
+          active_sessions?: any | null
+          login_alerts?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          two_factor_enabled?: boolean | null
+          two_factor_secret?: string | null
+          backup_codes?: string[] | null
+          last_password_change?: string | null
+          active_sessions?: any | null
+          login_alerts?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      integrations: {
+        Row: {
+          id: string
+          user_id: string
+          provider: string
+          provider_user_id: string | null
+          access_token: string | null
+          refresh_token: string | null
+          token_expires_at: string | null
+          scopes: string[] | null
+          enabled: boolean | null
+          synced_at: string | null
+          metadata: any | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          provider: string
+          provider_user_id?: string | null
+          access_token?: string | null
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          scopes?: string[] | null
+          enabled?: boolean | null
+          synced_at?: string | null
+          metadata?: any | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          provider?: string
+          provider_user_id?: string | null
+          access_token?: string | null
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          scopes?: string[] | null
+          enabled?: boolean | null
+          synced_at?: string | null
+          metadata?: any | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      organizations: {
+        Row: {
+          id: string
+          name: string
+          slug: string | null
+          owner_id: string
+          plan: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug?: string | null
+          owner_id: string
+          plan?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string | null
+          owner_id?: string
+          plan?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      organization_members: {
+        Row: {
+          id: string
+          organization_id: string
+          user_id: string
+          role: string | null
+          invited_by: string | null
+          invited_at: string | null
+          joined_at: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          user_id: string
+          role?: string | null
+          invited_by?: string | null
+          invited_at?: string | null
+          joined_at?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          user_id?: string
+          role?: string | null
+          invited_by?: string | null
+          invited_at?: string | null
+          joined_at?: string | null
+          created_at?: string | null
         }
         Relationships: []
       }
@@ -829,6 +1253,9 @@ export type CalendarEvent = Tables<"calendar_events">
 export type EmailThread = Tables<"email_threads">
 export type DriveDocument = Tables<"drive_documents">
 export type NotionPage = Tables<"notion_pages">
+export type NewsArticle = Tables<"news_articles">
+export type NewsCategory = Tables<"news_categories">
+export type UserInterest = Tables<"user_interests">
 export type Stage = Enums<"stage">
 export type CommentType = Enums<"comment_type">
 

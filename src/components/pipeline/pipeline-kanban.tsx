@@ -1,5 +1,28 @@
 "use client"
 
+/**
+ * Pipeline Kanban View Component
+ * 
+ * Displays companies in a kanban board organized by pipeline stage.
+ * 
+ * Features:
+ * - Drag and drop to move companies between stages (TODO: implement)
+ * - Company cards with logo, founder, tags, and last contact
+ * - Collapsible columns to focus on specific stages
+ * - Click to navigate to company detail page
+ * 
+ * Stages:
+ * - Inbound: Initial contact/application
+ * - Qualified: Passed initial screening  
+ * - Diligence: Deep dive analysis
+ * - Committed: Deal closed
+ * - Passed: Decided not to invest
+ * 
+ * Props:
+ * - companies: Array of companies with relations (founder, tags, etc.)
+ * - onStageChange: Callback when company stage is changed
+ */
+
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
@@ -8,6 +31,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { STAGES, STAGE_CLASSES, formatRelative, type Stage, type Tag } from "@/lib/store"
 import { MaximizeIcon, MinimizeIcon } from "./icons"
 
+/**
+ * Company data for display in kanban card
+ */
 interface CompanyDisplay {
   id: string
   name: string
@@ -16,16 +42,25 @@ interface CompanyDisplay {
   stage: Stage
 }
 
+/**
+ * Founder data for display in kanban card
+ */
 interface FounderDisplay {
   name: string
   email?: string
 }
 
+/**
+ * Owner (user) data for display in kanban card
+ */
 interface OwnerDisplay {
   name: string
   initials: string
 }
 
+/**
+ * Complete company data with all relations
+ */
 interface CompanyWithRelations {
   company: CompanyDisplay
   founder: FounderDisplay | undefined
@@ -34,7 +69,15 @@ interface CompanyWithRelations {
   lastContact: string | undefined
 }
 
-// Company logo component with fallback
+/**
+ * Company Logo Component
+ * 
+ * Fetches company logo from Clearbit Logo API using website domain.
+ * Falls back to first letter of company name if logo unavailable.
+ * 
+ * @param company - Company data with website URL
+ * @param size - Logo size ('sm' or 'md')
+ */
 function CompanyLogo({ company, size = 'sm' }: { company: CompanyDisplay; size?: 'sm' | 'md' }) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [hasError, setHasError] = useState(false)
