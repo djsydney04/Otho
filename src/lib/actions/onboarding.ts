@@ -170,9 +170,6 @@ export async function saveOnboardingStep(
     
     // Build the update object with only non-undefined values
     const updateData: Record<string, any> = {
-      id: userId,
-      email: user.email!,
-      name: user.user_metadata?.full_name || user.email!.split("@")[0],
       onboarding_step: step,
       updated_at: new Date().toISOString(),
     }
@@ -197,12 +194,12 @@ export async function saveOnboardingStep(
     if (data.ai_help_focus !== undefined) updateData.ai_help_focus = data.ai_help_focus
     if (data.ai_tone !== undefined) updateData.ai_tone = data.ai_tone
     
+    // Use update instead of upsert since user already exists (they're authenticated)
+    // This avoids TypeScript errors with Record<string, any> type
     const { error } = await supabase
       .from("users")
-      .upsert(updateData, {
-        onConflict: "id",
-        ignoreDuplicates: false,
-      })
+      .update(updateData)
+      .eq("id", userId)
     
     if (error) {
       console.error("Error saving onboarding step:", error)
