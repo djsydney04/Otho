@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server"
-import { GoogleGenerativeAI } from "@google/generative-ai"
 import { createClient as createServerSupabaseClient } from "@/lib/supabase/server"
 import { getPersonalizedPrompt } from "@/lib/personalization"
-import { exaSearch } from "@/lib/exa"
-
-// Use GEMINI_API_KEY (user's env var naming)
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash-exp"
+import {
+  chatCompletion,
+  isOpenRouterConfigured,
+  MODELS,
+  type Message,
+} from "@/lib/integrations/openrouter"
+import {
+  buildContext,
+  getCitationSystemPrompt,
+  persistWebDocument,
+} from "@/lib/integrations/context-builder"
 
 interface IncomingMessage {
   role: "user" | "assistant"
@@ -27,14 +32,11 @@ export async function POST(request: Request) {
       founderId?: string
     } = await request.json()
 
-    if (!GEMINI_API_KEY) {
+    if (!isOpenRouterConfigured()) {
       return NextResponse.json({
-        reply: "Please add GEMINI_API_KEY to your .env.local file to enable Otho. You can get an API key from https://aistudio.google.com/app/apikey",
+        reply: "Please add OPEN_ROUTER_API to your .env.local file to enable Otho. You can get an API key from https://openrouter.ai/keys",
       })
     }
-
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL })
 
     // Get authenticated Supabase client
     const supabase = await createServerSupabaseClient()
@@ -72,10 +74,10 @@ export async function POST(request: Request) {
       }
     }
     
-    // Fetch specific company or founder if provided
+    // Fetch specific company or founder for context
     let focusedContext: any = null
-    let webSearchResults = null
-    let websiteContent: string | null = null
+    let companyName: string | undefined
+    let founderName: string | undefined
     
     if (companyId) {
       const { data: company } = await supabase
@@ -97,46 +99,7 @@ export async function POST(request: Request) {
       
       if (company) {
         focusedContext = company
-        
-        // Fetch website content if available
-        let websiteContent = null
-        if (company.website) {
-          try {
-            // Try to fetch website content using Exa's findSimilar for the homepage
-            const urlSearchResults = await exaSearch({
-              query: `site:${company.website.replace(/^https?:\/\//, '')}`,
-              numResults: 3,
-              useAutoprompt: false,
-              type: "neural",
-              contents: {
-                text: { maxCharacters: 1000 },
-                highlights: { numSentences: 3 },
-              }
-            })
-            if (urlSearchResults && urlSearchResults.length > 0) {
-              websiteContent = urlSearchResults[0].text || urlSearchResults[0].highlights?.join(' ')
-            }
-          } catch (e) {
-            console.error("Website fetch error:", e)
-          }
-        }
-        
-        // Search web for company insights
-        try {
-          const searchQuery = `${company.name} startup ${company.description ? company.description.slice(0, 100) : ""} competitive advantage market`
-          webSearchResults = await exaSearch({
-            query: searchQuery,
-            numResults: 5,
-            useAutoprompt: true,
-            type: "neural",
-            contents: {
-              text: { maxCharacters: 500 },
-              highlights: { numSentences: 2 },
-            }
-          })
-        } catch (e) {
-          console.error("Web search error:", e)
-        }
+        companyName = company.name
       }
     } else if (founderId) {
       const { data: founder } = await supabase
@@ -157,23 +120,7 @@ export async function POST(request: Request) {
       
       if (founder) {
         focusedContext = founder
-        
-        // Search web for founder insights
-        try {
-          const searchQuery = `${founder.name} ${founder.previous_companies ? founder.previous_companies[0] : ""} entrepreneur founder background`
-          webSearchResults = await exaSearch({
-            query: searchQuery,
-            numResults: 5,
-            useAutoprompt: true,
-            type: "neural",
-            contents: {
-              text: { maxCharacters: 500 },
-              highlights: { numSentences: 2 },
-            }
-          })
-        } catch (e) {
-          console.error("Web search error:", e)
-        }
+        founderName = founder.name
       }
     }
     
@@ -196,7 +143,7 @@ export async function POST(request: Request) {
       )
       .limit(20)
 
-    const context = companies?.map((company) => ({
+    const portfolioContext = companies?.map((company) => ({
       id: company.id,
       name: company.name,
       stage: company.stage,
@@ -209,9 +156,43 @@ export async function POST(request: Request) {
       founder: company.founder,
     }))
 
-    const systemPrompt = `You are Otho, an expert Venture Capital Analyst and knowledgeable AI assistant powered by Google Gemini.
+    // Build enriched context using Pinecone + Web search
+    const lastMessage = messages[messages.length - 1]?.content || ""
+    let contextPack = null
+    let sourceCitations = ""
+    let contextPackText = ""
+
+    if (user && (companyId || founderId || lastMessage.length > 10)) {
+      try {
+        contextPack = await buildContext({
+          userId: user.id,
+          message: lastMessage,
+          companyId,
+          companyName,
+          founderId,
+          founderName,
+          includeWebSearch: true,
+        })
+        sourceCitations = contextPack.sourceCitations
+        contextPackText = contextPack.contextPackText
+      } catch (e) {
+        console.error("[Context Builder] Failed:", e)
+      }
+    }
+
+    const systemPrompt = `You are Otho, an expert Venture Capital Analyst and knowledgeable AI assistant powered by Claude.
 
 ${personalizedContext ? `USER CONTEXT:\n${personalizedContext}\n\n` : ""}
+
+${contextPackText ? `
+${getCitationSystemPrompt()}
+
+AVAILABLE SOURCES:
+${sourceCitations}
+
+SOURCE CONTENT:
+${contextPackText}
+` : ""}
 
 You can answer ANY question - both about the user's portfolio AND general questions about investing, markets, technology, startups, or any other topic.
 
@@ -234,11 +215,11 @@ Reference the portfolio data below. Structure company analysis as:
 - **Verdict**: Your take
 
 WHEN DISCUSSING A FOCUSED COMPANY/FOUNDER:
-- Use the web research provided to give real-time insights
+- Use the retrieved sources to give real-time insights
 - Analyze competitive positioning, market dynamics, and potential risks
 - Provide actionable intelligence about what to watch for
 - Suggest areas for due diligence based on recent news/articles
-- Be specific and cite sources when possible
+- Be specific and cite sources with [S#] format when possible
 
 WHEN ANSWERING GENERAL QUESTIONS:
 Answer directly using your knowledge. Topics you're great at:
@@ -307,20 +288,10 @@ IMPORTANT:
 ${focusedContext ? `
 FOCUSED ENTITY (you are chatting about this):
 ${companyId ? `COMPANY: ${JSON.stringify(focusedContext, null, 2)}` : `FOUNDER: ${JSON.stringify(focusedContext, null, 2)}`}
-
-${focusedContext.website ? `
-WEBSITE CONTENT (from ${focusedContext.website}):
-${websiteContent || "Unable to fetch website content, but website is available at: " + focusedContext.website}
-` : ''}
-
-${webSearchResults && webSearchResults.length > 0 ? `
-RECENT WEB RESEARCH (use this for competitive analysis, market insights, risks):
-${webSearchResults.map((r: any) => `- ${r.title}: ${r.text?.slice(0, 300)}... (Source: ${r.url})`).join('\n')}
-` : ''}
 ` : ''}
 
 USER'S PORTFOLIO (for reference - do not list all companies unless specifically asked):
-${JSON.stringify(context || [])}
+${JSON.stringify(portfolioContext || [])}
 
 When referencing companies:
 - Only mention companies when directly relevant to the conversation
@@ -331,47 +302,38 @@ When referencing companies:
 CURRENT SCREEN:
 ${pageContext || "Dashboard"}`
 
-    // Build conversation for Gemini
-    const chatHistory = messages.slice(0, -1).map((msg) => ({
-      role: msg.role === "user" ? "user" : "model",
-      parts: [{ text: msg.content }],
+    // Build messages for OpenRouter
+    const chatHistory: Message[] = messages.slice(0, -1).map((msg) => ({
+      role: msg.role === "user" ? "user" : "assistant",
+      content: msg.content,
     }))
 
     // Get the last user message
-    const lastMessage = messages[messages.length - 1]
     const userPrompt = messages.length === 1
-      ? `${systemPrompt}\n\nUser: ${lastMessage?.content || ""}`
-      : lastMessage?.content || ""
+      ? lastMessage
+      : lastMessage
 
-    let rawReply: string
+    // All messages including system
+    const allMessages: Message[] = [
+      { role: "system", content: systemPrompt },
+      ...chatHistory,
+      { role: "user", content: userPrompt },
+    ]
 
-    if (chatHistory.length > 0) {
-      // Use chat mode for multi-turn conversations
-      const chat = model.startChat({
-        history: chatHistory as any,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1024,
-        },
-      })
-      const result = await chat.sendMessage(userPrompt)
-      rawReply = result.response.text()
-    } else {
-      // Single turn - include system prompt
-      const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1024,
-        },
-      })
-      rawReply = result.response.text()
-    }
+    // Call OpenRouter with Premium model for user-facing chat
+    const result = await chatCompletion({
+      model: MODELS.PREMIUM,
+      messages: allMessages,
+      temperature: 0.7,
+      maxTokens: 1024,
+    })
+
+    const rawReply = result.content
 
     // Parse out tool calls and company references
     let reply = rawReply
     let proposedAction = null
-    let companyReferences: Array<{companyId: string; companyName: string; reason: string}> = []
+    const companyReferences: Array<{companyId: string; companyName: string; reason: string}> = []
     
     // Find all JSON blocks
     const jsonMatches = rawReply.matchAll(/```json\n([\s\S]*?)\n```/g)
@@ -382,22 +344,22 @@ ${pageContext || "Dashboard"}`
         // Handle company references
         if (parsed.type === "company_reference") {
           // If only companyName provided, look up ID from portfolio
-          let companyId = parsed.companyId
-          let companyName = parsed.companyName || "Unknown"
-          if (!companyId && parsed.companyName && context) {
-            const found = context.find((c: any) => 
+          let refCompanyId = parsed.companyId
+          let refCompanyName = parsed.companyName || "Unknown"
+          if (!refCompanyId && parsed.companyName && portfolioContext) {
+            const found = portfolioContext.find((c: any) => 
               c.name.toLowerCase() === parsed.companyName.toLowerCase()
             )
             if (found) {
-              companyId = found.id
-              companyName = found.name
+              refCompanyId = found.id
+              refCompanyName = found.name
             }
           }
           
-          if (companyId) {
+          if (refCompanyId) {
             companyReferences.push({
-              companyId,
-              companyName,
+              companyId: refCompanyId,
+              companyName: refCompanyName,
               reason: parsed.reason || "Mentioned in conversation"
             })
             reply = reply.replace(match[0], "").trim()
@@ -407,8 +369,8 @@ ${pageContext || "Dashboard"}`
         // Handle add_comment action (auto-comment on news discovery)
         if (parsed.tool === "add_comment") {
           // Look up company/founder ID by name if needed
-          if (!parsed.companyId && parsed.companyName && context) {
-            const found = context.find((c: any) => 
+          if (!parsed.companyId && parsed.companyName && portfolioContext) {
+            const found = portfolioContext.find((c: any) => 
               c.name.toLowerCase() === parsed.companyName.toLowerCase()
             )
             if (found) parsed.companyId = found.id
@@ -462,8 +424,8 @@ ${pageContext || "Dashboard"}`
         // Handle account actions
         if (parsed.tool === "update_company" || parsed.tool === "update_founder" || parsed.tool === "create_record") {
           // Look up company ID by name if needed
-          if (parsed.tool === "update_company" && !parsed.companyId && parsed.companyName && context) {
-            const found = context.find((c: any) => 
+          if (parsed.tool === "update_company" && !parsed.companyId && parsed.companyName && portfolioContext) {
+            const found = portfolioContext.find((c: any) => 
               c.name.toLowerCase() === parsed.companyName.toLowerCase()
             )
             if (found) parsed.companyId = found.id
@@ -562,6 +524,21 @@ ${pageContext || "Dashboard"}`
     // Replace asterisks with bullet points
     reply = reply.replace(/^\s*\*\s+/gm, '- ')
 
+    // Persist web documents for flywheel effect
+    if (contextPack && contextPack.externalSources.length > 0 && user) {
+      // Persist in background (don't await)
+      for (const source of contextPack.externalSources.slice(0, 3)) {
+        persistWebDocument(user.id, {
+          url: source.url || "",
+          title: source.title,
+          content: source.content,
+          companyId,
+          founderId,
+          retrievedAt: new Date().toISOString(),
+        }).catch((e) => console.error("[Flywheel] Failed to persist:", e))
+      }
+    }
+
     // If discussing a company and reply contains substantial insights, save to ai_analysis
     if (companyId && focusedContext && reply.length > 200) {
       // Extract key insights from the reply
@@ -589,10 +566,15 @@ ${pageContext || "Dashboard"}`
       reply, 
       proposedAction, 
       insightsSaved: !!companyId,
-      companyReferences: companyReferences.length > 0 ? companyReferences : undefined
+      companyReferences: companyReferences.length > 0 ? companyReferences : undefined,
+      model: result.model,
+      sourcesUsed: contextPack ? {
+        internal: contextPack.internalSources.length,
+        external: contextPack.externalSources.length,
+      } : undefined,
     })
   } catch (error: any) {
-    console.error("Gemini route error:", error)
+    console.error("Chat route error:", error)
     return NextResponse.json({ error: error?.message || "Unable to process chat." }, { status: 500 })
   }
 }

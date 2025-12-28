@@ -14,4 +14,5 @@ export { DrivePicker } from "./drive-picker"
 export { ArticleCard, FeaturedArticleCard, SpotlightCard } from "./article-card"
 export { OthoReport } from "./otho-report"
 export { CompanyReferenceCard } from "./company-reference-card"
+export { EditFounderDialog } from "./edit-founder-dialog"
 

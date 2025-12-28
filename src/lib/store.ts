@@ -1,6 +1,22 @@
 "use client"
 
-// Client-side store for managing application state with Supabase backend
+/**
+ * Global Application Store
+ * 
+ * This is the central state management for the Angel Lead application.
+ * Built with Zustand for simple, performant state management.
+ * 
+ * Key Responsibilities:
+ * - Manages companies, founders, tags, and user data
+ * - Handles all API communication with the backend
+ * - Provides loading states and error handling
+ * - Syncs with Google Calendar and Gmail
+ * 
+ * Usage:
+ * ```tsx
+ * const { companies, fetchCompanies, addCompany } = useAppStore()
+ * ```
+ */
 
 import { create } from 'zustand'
 import type { 
@@ -16,65 +32,125 @@ import type {
   FounderInsert,
 } from './supabase/types'
 
-// Re-export types and constants for convenience
+// Re-export types and constants for convenience across the app
 export type { Stage, Company, Founder, User, Comment, Tag, CalendarEvent, EmailThread, CompanyWithRelations }
 export { STAGES, STAGE_CLASSES, formatRelative } from './constants'
 
+/**
+ * Calendar Sync Result
+ * Returned after syncing with Google Calendar
+ */
 interface CalendarSyncResult {
   success: boolean
   syncedAt: string
   totalEvents: number
-  matchedEvents: number
+  matchedEvents: number // Events matched to companies/founders
 }
 
+/**
+ * Email Sync Result
+ * Returned after syncing with Gmail
+ */
 interface EmailSyncResult {
   success: boolean
   syncedAt: string
   totalEmails: number
-  matchedEmails: number
+  matchedEmails: number // Emails matched to companies/founders
 }
 
+/**
+ * Application State Interface
+ * Defines the shape of the global store
+ */
 interface AppState {
-  // Data
+  // ==================== DATA ====================
+  /** All companies with their relations (founder, tags, comments, etc.) */
   companies: CompanyWithRelations[]
+  
+  /** Available tags for categorizing companies */
   tags: Tag[]
+  
+  /** All founders in the system */
   founders: Founder[]
   
-  // Loading states
+  // ==================== LOADING STATES ====================
+  /** General loading state for async operations */
   loading: boolean
+  
+  /** Error message if any operation fails */
   error: string | null
   
-  // Calendar sync state
+  // ==================== CALENDAR SYNC ====================
+  /** Last time calendar was synced with Google */
   lastSyncTime: Date | null
+  
+  /** Whether calendar sync is currently in progress */
   syncing: boolean
   
-  // Email sync state
+  // ==================== EMAIL SYNC ====================
+  /** Last time emails were synced with Gmail */
   lastEmailSyncTime: Date | null
+  
+  /** Whether email sync is currently in progress */
   emailSyncing: boolean
   
-  // Current user
+  // ==================== USER ====================
+  /** Currently authenticated user */
   currentUser: User | null
   
-  // UI state
+  // ==================== UI STATE ====================
+  /** Whether the sidebar is collapsed */
   sidebarCollapsed: boolean
+  
+  /** Toggle sidebar collapsed state */
   setSidebarCollapsed: (collapsed: boolean) => void
   
-  // Actions
+  // ==================== DATA FETCHING ====================
+  /** Fetch all companies from the API */
   fetchCompanies: () => Promise<void>
+  
+  /** Fetch all tags from the API */
   fetchTags: () => Promise<void>
+  
+  /** Fetch all founders from the API */
   fetchFounders: () => Promise<void>
   
+  // ==================== DATA MUTATIONS ====================
+  /**
+   * Add a new company to the pipeline
+   * Can either link to existing founder by UUID or create a new one
+   */
   addCompany: (company: {
     name: string
     description?: string
     website?: string
     stage?: Stage
-    founder_id?: string
-    founder_name?: string
-    founder_email?: string
+    founder_id?: string // Link to existing founder by UUID
+    founder?: { // Create new founder (will be created first, then linked by UUID)
+      name: string
+      email: string
+      role_title?: string
+      linkedin?: string
+      twitter?: string
+      location?: string
+      bio?: string
+      previous_companies?: string
+      education?: string
+      domain_expertise?: string[]
+      source?: string
+      warm_intro_path?: string
+      notes?: string
+    }
     tags?: string[]
+    owner?: string
+    is_priority?: boolean
+    needs_diligence?: boolean
+    needs_followup?: boolean
   }) => Promise<CompanyWithRelations | null>
   
+  /**
+   * Add a new founder to the system
+   */
   addFounder: (founder: {
     name: string
     email: string
@@ -85,26 +161,53 @@ interface AppState {
     notes?: string
   }) => Promise<Founder | null>
   
+  /**
+   * Update a company's pipeline stage
+   * Automatically adds a stage change comment
+   */
   updateCompanyStage: (companyId: string, stage: Stage) => Promise<void>
   
+  /**
+   * Add a comment/note to a company
+   */
   addComment: (companyId: string, content: string, type?: Comment["comment_type"]) => Promise<Comment | null>
   
-  // Calendar actions
+  // ==================== CALENDAR ACTIONS ====================
+  /** Set calendar syncing state */
   setSyncing: (syncing: boolean) => void
+  
+  /** Update last sync time */
   setLastSyncTime: (time: Date) => void
+  
+  /** Clear all calendar sync data */
   clearCalendarData: () => void
   
-  // Email actions
+  // ==================== EMAIL ACTIONS ====================
+  /** Set email syncing state */
   setEmailSyncing: (syncing: boolean) => void
+  
+  /** Update last email sync time */
   setLastEmailSyncTime: (time: Date) => void
+  
+  /** Clear all email sync data */
   clearEmailData: () => void
   
-  // Initialize
+  // ==================== INITIALIZATION ====================
+  /**
+   * Initialize the store by fetching all data
+   * Call this on app mount
+   */
   initialize: () => Promise<void>
 }
 
+/**
+ * Main Application Store
+ * 
+ * This is a Zustand store that manages all application state.
+ * It's a singleton that can be used across the entire app.
+ */
 export const useAppStore = create<AppState>((set, get) => ({
-  // Initial state
+  // ==================== INITIAL STATE ====================
   companies: [],
   tags: [],
   founders: [],
@@ -117,10 +220,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentUser: null,
   sidebarCollapsed: false,
   
-  // UI actions
+  // ==================== UI ACTIONS ====================
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   
-  // Fetch companies from API
+  // ==================== DATA FETCHING ====================
+  /**
+   * Fetch all companies for the current user
+   * Includes related data: founder, tags, comments
+   */
   fetchCompanies: async () => {
     set({ loading: true, error: null })
     try {
@@ -143,7 +250,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
-  // Fetch tags from API
+  /**
+   * Fetch all available tags
+   * Tags are used to categorize companies (e.g., "SaaS", "B2B", "AI")
+   */
   fetchTags: async () => {
     try {
       const response = await fetch('/api/tags')
@@ -159,7 +269,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
-  // Fetch founders from API
+  /**
+   * Fetch all founders
+   * Founders are people who run companies in the pipeline
+   */
   fetchFounders: async () => {
     try {
       const response = await fetch('/api/founders')
@@ -171,7 +284,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
-  // Add a new company
+  // ==================== DATA MUTATIONS ====================
+  /**
+   * Add a new company to the pipeline
+   * 
+   * This will:
+   * 1. Create the company in the database
+   * 2. Optionally create or link a founder
+   * 3. Add tags if provided
+   * 4. Refresh the companies and founders lists
+   * 5. Generate AI analysis in the background
+   */
   addCompany: async (companyData) => {
     try {
       const response = await fetch('/api/companies', {
@@ -198,7 +321,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
-  // Add a new founder
+  /**
+   * Add a new founder
+   * 
+   * Creates a standalone founder record.
+   * Founders can later be linked to companies.
+   */
   addFounder: async (founderData) => {
     try {
       const response = await fetch('/api/founders', {
@@ -214,7 +342,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       
       const newFounder = await response.json()
       
-      // Refresh founders list
+      // Refresh founders list to include the new founder
       await get().fetchFounders()
       
       return newFounder
@@ -225,7 +353,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
-  // Update company stage
+  /**
+   * Update a company's pipeline stage
+   * 
+   * Stages: Inbound → Qualified → Diligence → Committed / Passed
+   * This automatically adds a stage change comment to the company timeline
+   */
   updateCompanyStage: async (companyId, stage) => {
     try {
       const response = await fetch(`/api/companies/${companyId}`, {
@@ -248,7 +381,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
-  // Add a comment
+  /**
+   * Add a comment to a company
+   * 
+   * Comments create a timeline of interactions and notes.
+   * Types: note, update, meeting, stage_change, email
+   */
   addComment: async (companyId, content, type = 'note') => {
     try {
       const response = await fetch('/api/comments', {
@@ -276,17 +414,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
-  // Calendar sync actions
+  // ==================== CALENDAR SYNC ====================
   setSyncing: (syncing) => set({ syncing }),
   setLastSyncTime: (time) => set({ lastSyncTime: time }),
   clearCalendarData: () => set({ lastSyncTime: null, syncing: false }),
   
-  // Email sync actions
+  // ==================== EMAIL SYNC ====================
   setEmailSyncing: (emailSyncing) => set({ emailSyncing }),
   setLastEmailSyncTime: (time) => set({ lastEmailSyncTime: time }),
   clearEmailData: () => set({ lastEmailSyncTime: null, emailSyncing: false }),
   
-  // Initialize store
+  // ==================== INITIALIZATION ====================
+  /**
+   * Initialize the store
+   * 
+   * Fetches all data in parallel: companies, tags, and founders
+   * Call this once when the app loads
+   */
   initialize: async () => {
     await Promise.all([
       get().fetchCompanies(),
@@ -296,7 +440,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 }))
 
-// Calendar sync function
+// ==================== EXTERNAL SYNC FUNCTIONS ====================
+/**
+ * Sync Calendar with Google Calendar
+ * 
+ * This function:
+ * 1. Fetches recent calendar events from Google Calendar
+ * 2. Matches events to companies/founders by email
+ * 3. Stores matched events in the database
+ * 4. Updates the last sync time
+ * 
+ * @returns Sync result with statistics or null if failed
+ */
 export async function syncCalendar(): Promise<CalendarSyncResult | null> {
   const store = useAppStore.getState()
   store.setSyncing(true)
@@ -328,7 +483,17 @@ export async function syncCalendar(): Promise<CalendarSyncResult | null> {
   }
 }
 
-// Email sync function
+/**
+ * Sync Emails with Gmail
+ * 
+ * This function:
+ * 1. Fetches recent emails from Gmail
+ * 2. Matches emails to companies/founders by email address
+ * 3. Stores matched email threads in the database
+ * 4. Updates the last sync time
+ * 
+ * @returns Sync result with statistics or null if failed
+ */
 export async function syncEmails(): Promise<EmailSyncResult | null> {
   const store = useAppStore.getState()
   store.setEmailSyncing(true)
@@ -360,7 +525,15 @@ export async function syncEmails(): Promise<EmailSyncResult | null> {
   }
 }
 
-// Create calendar event
+/**
+ * Create a Calendar Event in Google Calendar
+ * 
+ * Creates a new event in the user's Google Calendar.
+ * Automatically generates a Google Meet link if attendees are added.
+ * 
+ * @param event - Event details (summary, time, attendees, etc.)
+ * @returns Success status and event details including Meet link
+ */
 export async function createCalendarEvent(event: {
   summary: string
   description?: string
@@ -389,7 +562,20 @@ export async function createCalendarEvent(event: {
   }
 }
 
-// Helper to get company with all relations
+/**
+ * Fetch a Single Company with All Relations
+ * 
+ * Gets a complete company record including:
+ * - Founder information
+ * - Tags
+ * - Comments/timeline
+ * - Calendar events
+ * - Email threads
+ * - Drive documents
+ * 
+ * @param companyId - The company's UUID
+ * @returns Complete company object or null if not found
+ */
 export async function fetchCompanyWithRelations(companyId: string): Promise<CompanyWithRelations | null> {
   try {
     const response = await fetch(`/api/companies/${companyId}`)

@@ -154,9 +154,9 @@ export function PipelineTable({ companies }: PipelineTableProps) {
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
-                    {tags.map((tag) => (
+                    {tags.map((tag, index) => (
                       <Badge
-                        key={tag.id}
+                        key={tag.id || `tag-${index}`}
                         variant="secondary"
                         className="text-xs font-normal"
                       >

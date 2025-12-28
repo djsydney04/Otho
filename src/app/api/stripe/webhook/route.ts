@@ -57,11 +57,12 @@ export async function POST(request: NextRequest) {
 
           const activeSubscription = subscription.data[0]
 
-          if (activeSubscription) {
+          if (activeSubscription && session.metadata?.user_id) {
+            // Update billing_info
             await (supabase as any)
               .from("billing_info")
               .upsert({
-                user_id: session.metadata?.user_id,
+                user_id: session.metadata.user_id,
                 plan: plan,
                 stripe_customer_id: session.customer,
                 stripe_subscription_id: activeSubscription.id,
@@ -72,6 +73,18 @@ export async function POST(request: NextRequest) {
               }, {
                 onConflict: "user_id"
               })
+            
+            // Sync to users table (trigger will handle this, but we can also do it explicitly)
+            await (supabase as any)
+              .from("users")
+              .update({
+                billing_tier: plan,
+                billing_status: activeSubscription.status,
+                stripe_customer_id: session.customer,
+                stripe_subscription_id: activeSubscription.id,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", session.metadata.user_id)
           }
         }
         break
@@ -80,8 +93,16 @@ export async function POST(request: NextRequest) {
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription
-        const stripe = getStripe()
         
+        // Get user_id from billing_info
+        const { data: billing } = await (supabase as any)
+          .from("billing_info")
+          .select("user_id, plan")
+          .eq("stripe_subscription_id", subscription.id)
+          .single()
+
+        if (!billing) break
+
         if (subscription.status === "canceled" || subscription.status === "unpaid") {
           // Downgrade to hobby
           await (supabase as any)
@@ -92,25 +113,36 @@ export async function POST(request: NextRequest) {
               updated_at: new Date().toISOString(),
             })
             .eq("stripe_subscription_id", subscription.id)
+          
+          // Sync to users table
+          await (supabase as any)
+            .from("users")
+            .update({
+              billing_tier: "hobby",
+              billing_status: subscription.status,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", billing.user_id)
         } else {
           // Update subscription info
-          const { data: billing } = await (supabase as any)
+          await (supabase as any)
             .from("billing_info")
-            .select("plan")
+            .update({
+              subscription_status: subscription.status,
+              current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+              current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+              updated_at: new Date().toISOString(),
+            })
             .eq("stripe_subscription_id", subscription.id)
-            .single()
-
-          if (billing) {
-            await (supabase as any)
-              .from("billing_info")
-              .update({
-                subscription_status: subscription.status,
-                current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-                current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-                updated_at: new Date().toISOString(),
-              })
-              .eq("stripe_subscription_id", subscription.id)
-          }
+          
+          // Sync to users table
+          await (supabase as any)
+            .from("users")
+            .update({
+              billing_status: subscription.status,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", billing.user_id)
         }
         break
       }
@@ -121,15 +153,33 @@ export async function POST(request: NextRequest) {
           const stripe = getStripe()
           const subscription = await stripe.subscriptions.retrieve(invoice.subscription)
           
-          await (supabase as any)
+          // Get billing info to find user_id
+          const { data: billing } = await (supabase as any)
             .from("billing_info")
-            .update({
-              subscription_status: subscription.status,
-              current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-              current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-              updated_at: new Date().toISOString(),
-            })
+            .select("user_id, plan")
             .eq("stripe_subscription_id", subscription.id)
+            .single()
+          
+          if (billing) {
+            await (supabase as any)
+              .from("billing_info")
+              .update({
+                subscription_status: subscription.status,
+                current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+                current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("stripe_subscription_id", subscription.id)
+            
+            // Sync to users table
+            await (supabase as any)
+              .from("users")
+              .update({
+                billing_status: subscription.status,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", billing.user_id)
+          }
         }
         break
       }
@@ -137,13 +187,31 @@ export async function POST(request: NextRequest) {
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice
         if (invoice.subscription && typeof invoice.subscription === "string") {
-          await (supabase as any)
+          // Get billing info to find user_id
+          const { data: billing } = await (supabase as any)
             .from("billing_info")
-            .update({
-              subscription_status: "past_due",
-              updated_at: new Date().toISOString(),
-            })
+            .select("user_id")
             .eq("stripe_subscription_id", invoice.subscription)
+            .single()
+          
+          if (billing) {
+            await (supabase as any)
+              .from("billing_info")
+              .update({
+                subscription_status: "past_due",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("stripe_subscription_id", invoice.subscription)
+            
+            // Sync to users table
+            await (supabase as any)
+              .from("users")
+              .update({
+                billing_status: "past_due",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", billing.user_id)
+          }
         }
         break
       }
@@ -158,4 +226,5 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
 

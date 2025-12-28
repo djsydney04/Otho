@@ -342,51 +342,56 @@ function CompanyHeader({
 
       <div className="flex items-center gap-2">
         {/* Action Buttons */}
-        <button
-          onClick={() => onToggleFlag("is_priority")}
-          className={`group relative flex h-9 w-9 items-center justify-center rounded-lg border smooth ${
-            (company as any).is_priority
-              ? "bg-amber-50 border-amber-200 text-amber-600"
-              : "hover:bg-secondary text-muted-foreground"
-          }`}
-          title={
-            (company as any).is_priority
-              ? "Priority: This company is marked as high priority. Click to remove."
-              : "Priority: Mark this company as high priority for quick access and focus."
-          }
-        >
-          <StarIcon className="h-4 w-4" filled={(company as any).is_priority} />
-        </button>
-        <button
-          onClick={() => onToggleFlag("needs_followup")}
-          className={`group relative flex h-9 w-9 items-center justify-center rounded-lg border smooth ${
-            (company as any).needs_followup
-              ? "bg-blue-50 border-blue-200 text-blue-600"
-              : "hover:bg-secondary text-muted-foreground"
-          }`}
-          title={
-            (company as any).needs_followup
-              ? "Follow-up: You need to follow up with this company. Click to clear reminder."
-              : "Follow-up: Set a reminder to follow up with this company later."
-          }
-        >
-          <BellIcon className="h-4 w-4" />
-        </button>
-        <button
-          onClick={() => onToggleFlag("needs_diligence")}
-          className={`group relative flex h-9 w-9 items-center justify-center rounded-lg border smooth ${
-            (company as any).needs_diligence
-              ? "bg-purple-50 border-purple-200 text-purple-600"
-              : "hover:bg-secondary text-muted-foreground"
-          }`}
-          title={
-            (company as any).needs_diligence
-              ? "Diligence: This company needs more research/diligence. Click to mark complete."
-              : "Diligence: Mark this company as needing more research and due diligence."
-          }
-        >
-          <SearchCheckIcon className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onToggleFlag("is_priority")}
+            className={`group relative flex items-center gap-2 px-3 h-9 rounded-lg border smooth ${
+              (company as any).is_priority
+                ? "bg-amber-50 border-amber-200 text-amber-600"
+                : "hover:bg-secondary text-muted-foreground"
+            }`}
+            title={
+              (company as any).is_priority
+                ? "Priority: This company is marked as high priority. Click to remove."
+                : "Priority: Mark this company as high priority for quick access and focus."
+            }
+          >
+            <StarIcon className="h-4 w-4" filled={(company as any).is_priority} />
+            <span className="text-xs font-medium">Priority</span>
+          </button>
+          <button
+            onClick={() => onToggleFlag("needs_followup")}
+            className={`group relative flex items-center gap-2 px-3 h-9 rounded-lg border smooth ${
+              (company as any).needs_followup
+                ? "bg-blue-50 border-blue-200 text-blue-600"
+                : "hover:bg-secondary text-muted-foreground"
+            }`}
+            title={
+              (company as any).needs_followup
+                ? "Follow-up: You need to follow up with this company. Click to clear reminder."
+                : "Follow-up: Set a reminder to follow up with this company later."
+            }
+          >
+            <BellIcon className="h-4 w-4" />
+            <span className="text-xs font-medium">Follow-up</span>
+          </button>
+          <button
+            onClick={() => onToggleFlag("needs_diligence")}
+            className={`group relative flex items-center gap-2 px-3 h-9 rounded-lg border smooth ${
+              (company as any).needs_diligence
+                ? "bg-purple-50 border-purple-200 text-purple-600"
+                : "hover:bg-secondary text-muted-foreground"
+            }`}
+            title={
+              (company as any).needs_diligence
+                ? "Diligence: This company needs more research/diligence. Click to mark complete."
+                : "Diligence: Mark this company as needing more research and due diligence."
+            }
+          >
+            <SearchCheckIcon className="h-4 w-4" />
+            <span className="text-xs font-medium">Diligence</span>
+          </button>
+        </div>
 
         <div className="h-6 w-px bg-border mx-1" />
 

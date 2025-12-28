@@ -113,9 +113,9 @@ export default function BillingPage() {
       if (data) {
         setBilling(data)
         
-        // If user just completed checkout (success param), sync subscription
+        // If user just returned from Stripe (success or canceled), sync subscription
         const urlParams = new URLSearchParams(window.location.search)
-        if (urlParams.get("success") === "true") {
+        if (urlParams.get("success") === "true" || urlParams.get("canceled") === "true") {
           try {
             const syncRes = await fetch("/api/stripe/sync-subscription", { method: "POST" })
             const syncData = await syncRes.json()
@@ -129,7 +129,7 @@ export default function BillingPage() {
               if (updated) {
                 setBilling(updated)
               }
-              // Remove success param from URL
+              // Remove params from URL
               window.history.replaceState({}, "", "/settings/billing")
             }
           } catch (error) {
@@ -342,6 +342,101 @@ export default function BillingPage() {
           )
         })}
       </div>
+
+      {/* Current Subscription Details */}
+      {billing?.stripe_subscription_id && (
+        <div className="mt-10 space-y-6">
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Subscription Management</h2>
+            
+            <Card>
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Current Plan</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {billing.current_period_end 
+                          ? `Renews on ${new Date(billing.current_period_end).toLocaleDateString()}`
+                          : "No renewal date"}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="capitalize">
+                      {billing.plan}
+                    </Badge>
+                  </div>
+                  
+                  <div className="pt-4 border-t">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={async () => {
+                        try {
+                          const response = await fetch("/api/stripe/cancel-subscription")
+                          const data = await response.json()
+                          if (data.url) {
+                            window.location.href = data.url
+                          }
+                        } catch (error) {
+                          console.error("Failed to open cancel page:", error)
+                        }
+                      }}
+                    >
+                      Manage Subscription
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center mt-2">
+                      Cancel or update your subscription in Stripe
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Billing History */}
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Billing History</h2>
+            <Card>
+              <CardContent className="p-6">
+                <div className="space-y-3">
+                  {billing.current_period_start && (
+                    <div className="flex items-center justify-between py-2 border-b last:border-0">
+                      <div>
+                        <p className="text-sm font-medium">Current Period</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(billing.current_period_start).toLocaleDateString()} - {billing.current_period_end ? new Date(billing.current_period_end).toLocaleDateString() : "N/A"}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="text-xs">
+                        {billing.subscription_status || "active"}
+                      </Badge>
+                    </div>
+                  )}
+                  <div className="text-center py-4">
+                    <p className="text-sm text-muted-foreground">
+                      View full billing history in the{" "}
+                      <button
+                        onClick={async () => {
+                          try {
+                            const response = await fetch("/api/stripe/cancel-subscription")
+                            const data = await response.json()
+                            if (data.url) window.location.href = data.url
+                          } catch (error) {
+                            console.error("Failed to open portal:", error)
+                          }
+                        }}
+                        className="text-primary hover:underline"
+                      >
+                        Stripe Customer Portal
+                      </button>
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
 
       {/* FAQ/Help Section */}
       <div className="mt-12 p-6 rounded-xl bg-secondary/30 border">

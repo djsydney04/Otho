@@ -1,10 +1,20 @@
-import { GoogleGenerativeAI, type Content } from "@google/generative-ai"
+/**
+ * AI Integration Layer
+ * 
+ * Uses OpenRouter with tiered model system:
+ * - CHEAP (gpt-oss-20b): tagging, classification, entity extraction
+ * - WORKER (gpt-oss-120b): analysis drafts, summaries
+ * - PREMIUM (claude-sonnet-4.5): user-facing chat, strategy, reasoning
+ * 
+ * Legacy function names preserved for backward compatibility.
+ */
 
-// Initialize the Gemini client - using GEMINI_API_KEY (note: env var spelling)
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "")
-
-// Get the model name from env or default to gemini-2.0-flash
-const modelName = process.env.GEMINI_MODEL || "gemini-2.0-flash-exp"
+import {
+  chat,
+  isOpenRouterConfigured,
+  MODELS,
+  type Message,
+} from "./openrouter"
 
 export interface CompanyContext {
   id?: string
@@ -32,10 +42,9 @@ export interface ChatMessage {
 
 /**
  * Generate an AI analysis for a company based on available data
+ * Uses WORKER tier (gpt-oss-120b) for analysis drafts
  */
 export async function generateCompanyAnalysis(company: CompanyContext): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: modelName })
-
   const systemPrompt = `You are an expert angel investor and startup analyst. Your job is to provide insightful, actionable analysis of early-stage companies to help investors make informed decisions.
 
 When analyzing a company, consider:
@@ -50,9 +59,7 @@ Provide your analysis in a clear, structured format with sections. Be specific a
 
   const companyInfo = buildCompanyPrompt(company)
 
-  const prompt = `${systemPrompt}
-
-Please analyze the following company and provide an investment-focused overview:
+  const prompt = `Please analyze the following company and provide an investment-focused overview:
 
 ${companyInfo}
 
@@ -63,74 +70,47 @@ Provide a comprehensive but concise analysis (aim for 300-500 words). Structure 
 - **Concerns/Risks**: What to watch out for
 - **Recommended Next Steps**: What to learn more about or actions to take`
 
-  try {
-    const result = await model.generateContent(prompt)
-    const response = result.response
-    return response.text()
-  } catch (error: any) {
-    console.error("Error generating company analysis:", error)
-    throw new Error(`Failed to generate analysis: ${error.message}`)
-  }
+  const result = await chat(systemPrompt, [{ role: "user", content: prompt }], {
+    model: MODELS.WORKER, // Mid-tier for analysis drafts
+    temperature: 0.7,
+    maxTokens: 1024,
+  })
+
+  return result.content
 }
 
 /**
  * Chat with AI - general purpose for Otho
+ * Uses PREMIUM tier (claude-sonnet-4.5) for user-facing chat
  */
 export async function chatWithGemini(
   messages: Array<{ role: string; content: string }>,
   systemPrompt: string
 ): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: modelName })
+  // Convert to OpenRouter format
+  const openRouterMessages: Message[] = messages.map((msg) => ({
+    role: msg.role === "user" ? "user" : "assistant",
+    content: msg.content,
+  }))
 
-  // Build chat history for Gemini format
-  const history: Content[] = []
+  const result = await chat(systemPrompt, openRouterMessages, {
+    model: MODELS.PREMIUM, // Premium for user-facing chat
+    temperature: 0.7,
+    maxTokens: 1024,
+  })
 
-  // Add system context as first user message
-  if (messages.length > 0) {
-    // Process messages for Gemini format
-    for (let i = 0; i < messages.length - 1; i++) {
-      const msg = messages[i]
-      history.push({
-        role: msg.role === "user" ? "user" : "model",
-        parts: [{ text: msg.content }],
-      })
-    }
-  }
-
-  try {
-    const chat = model.startChat({
-      history,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 1024,
-      },
-    })
-
-    // Get the last message to send
-    const lastMessage = messages[messages.length - 1]
-    const promptWithSystem = messages.length === 1 
-      ? `${systemPrompt}\n\nUser: ${lastMessage.content}`
-      : lastMessage.content
-
-    const result = await chat.sendMessage(promptWithSystem)
-    const response = result.response
-    return response.text()
-  } catch (error: any) {
-    console.error("Error in Gemini chat:", error)
-    throw new Error(`Chat failed: ${error.message}`)
-  }
+  return result.content
 }
 
 /**
  * Chat about a specific company
+ * Uses PREMIUM tier for user-facing decisions
  */
 export async function chatAboutCompany(
   company: CompanyContext,
   messages: ChatMessage[],
   newMessage: string
 ): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: modelName })
-
   const systemPrompt = `You are Otho, an expert angel investor assistant helping to evaluate and discuss early-stage companies. You have access to information about the company being discussed and should provide insightful, actionable responses.
 
 Be helpful, concise, and specific. When asked questions, draw on the company context provided. If you don't have enough information to answer something, say so and suggest what information would be helpful.
@@ -145,35 +125,39 @@ You can help with:
 
   const companyInfo = buildCompanyPrompt(company)
 
-  // Build chat history for Gemini format
-  const history: Content[] = [
+  // Build conversation history
+  const conversationMessages: Message[] = [
     {
       role: "user",
-      parts: [{ text: `${systemPrompt}\n\nCompany Context:\n${companyInfo}\n\n---\nI'm ready to discuss this company. What would you like to know?` }],
+      content: `Company Context:\n${companyInfo}\n\n---\nI'm ready to discuss this company. What would you like to know?`,
     },
     {
-      role: "model",
-      parts: [{ text: `I've reviewed the information about ${company.name}. I'm ready to help you analyze this company, answer questions, or assist with any due diligence tasks. What would you like to explore?` }],
+      role: "assistant",
+      content: `I've reviewed the information about ${company.name}. I'm ready to help you analyze this company, answer questions, or assist with any due diligence tasks. What would you like to explore?`,
     },
   ]
 
   // Add previous messages
   for (const msg of messages) {
-    history.push({
-      role: msg.role === "user" ? "user" : "model",
-      parts: [{ text: msg.content }],
+    conversationMessages.push({
+      role: msg.role === "user" ? "user" : "assistant",
+      content: msg.content,
     })
   }
 
-  try {
-    const chat = model.startChat({ history })
-    const result = await chat.sendMessage(newMessage)
-    const response = result.response
-    return response.text()
-  } catch (error: any) {
-    console.error("Error in chat:", error)
-    throw new Error(`Chat failed: ${error.message}`)
-  }
+  // Add new message
+  conversationMessages.push({
+    role: "user",
+    content: newMessage,
+  })
+
+  const result = await chat(systemPrompt, conversationMessages, {
+    model: MODELS.PREMIUM,
+    temperature: 0.7,
+    maxTokens: 1024,
+  })
+
+  return result.content
 }
 
 /**
@@ -243,9 +227,12 @@ function buildCompanyPrompt(company: CompanyContext): string {
 }
 
 /**
- * Check if Gemini API is configured
+ * Check if AI is configured
+ * @deprecated Use isOpenRouterConfigured() from openrouter.ts instead
  */
 export function isGeminiConfigured(): boolean {
-  return !!process.env.GEMINI_API_KEY
+  return isOpenRouterConfigured()
 }
 
+// Re-export for convenience
+export { buildCompanyPrompt }

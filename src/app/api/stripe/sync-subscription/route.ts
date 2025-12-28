@@ -90,6 +90,18 @@ export async function POST(request: NextRequest) {
       }, {
         onConflict: "user_id"
       })
+    
+    // Sync to users table
+    await (supabase as any)
+      .from("users")
+      .update({
+        billing_tier: plan,
+        billing_status: activeSubscription.status,
+        stripe_customer_id: billing.stripe_customer_id,
+        stripe_subscription_id: activeSubscription.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", user.id)
 
     return NextResponse.json({
       plan,
@@ -108,4 +120,5 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
 

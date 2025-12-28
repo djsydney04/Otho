@@ -15,16 +15,32 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   
-  // SECURITY: First verify that this founder is linked to at least one company owned by the user
-  const { data: userCompanies } = await supabase
+  // SECURITY: Verify founder is linked to at least one company owned by (or accessible to) the user
+  // First check for companies with explicit ownership
+  let { data: userCompanies } = await supabase
     .from("companies")
-    .select("founder_id")
-    .eq("owner_id", user.id)
+    .select("id, founder_id, owner_id")
     .eq("founder_id", id)
-    .limit(1)
+    .limit(10)
   
-  if (!userCompanies || userCompanies.length === 0) {
+  // Filter to companies owned by this user OR orphan companies (no owner_id)
+  const accessibleCompanies = (userCompanies || []).filter(
+    (c) => c.owner_id === user.id || !c.owner_id
+  )
+  
+  if (accessibleCompanies.length === 0) {
     return NextResponse.json({ error: "Founder not found or access denied" }, { status: 404 })
+  }
+  
+  // Claim any orphan companies for this user
+  const orphanCompanies = accessibleCompanies.filter((c) => !c.owner_id)
+  if (orphanCompanies.length > 0) {
+    const orphanIds = orphanCompanies.map((c) => c.id)
+    await supabase
+      .from("companies")
+      .update({ owner_id: user.id })
+      .in("id", orphanIds)
+    console.log(`[Founders API] Claimed ${orphanIds.length} orphan companies for user ${user.id}`)
   }
   
   const { data: founder, error } = await supabase
@@ -95,15 +111,18 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   
-  // Verify founder is linked to user's companies
-  const { data: userCompanies } = await supabase
+  // Verify founder is linked to user's companies (including orphans)
+  const { data: linkedCompanies } = await supabase
     .from("companies")
-    .select("founder_id")
-    .eq("owner_id", user.id)
+    .select("id, owner_id")
     .eq("founder_id", id)
-    .limit(1)
+    .limit(10)
   
-  if (!userCompanies || userCompanies.length === 0) {
+  const accessibleCompanies = (linkedCompanies || []).filter(
+    (c) => c.owner_id === user.id || !c.owner_id
+  )
+  
+  if (accessibleCompanies.length === 0) {
     return NextResponse.json({ error: "Founder not found" }, { status: 404 })
   }
   
@@ -143,15 +162,18 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   
-  // Verify founder is linked to user's companies
-  const { data: userCompanies } = await supabase
+  // Verify founder is linked to user's companies (including orphans)
+  const { data: linkedCompanies } = await supabase
     .from("companies")
-    .select("founder_id")
-    .eq("owner_id", user.id)
+    .select("id, owner_id")
     .eq("founder_id", id)
-    .limit(1)
+    .limit(10)
   
-  if (!userCompanies || userCompanies.length === 0) {
+  const accessibleCompanies = (linkedCompanies || []).filter(
+    (c) => c.owner_id === user.id || !c.owner_id
+  )
+  
+  if (accessibleCompanies.length === 0) {
     return NextResponse.json({ error: "Founder not found" }, { status: 404 })
   }
   

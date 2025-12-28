@@ -29,13 +29,26 @@ export async function GET(
     .single()
   
   // SECURITY: Only allow access if user owns the company
-  // No legacy companies without owner_id should be accessible
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   
-  if (company && company.owner_id !== user.id) {
-    return NextResponse.json({ error: "Unauthorized - Company does not belong to your account" }, { status: 403 })
+  // Check ownership - company must belong to the current user
+  // Handle legacy companies without owner_id by claiming them on first access
+  if (company) {
+    if (company.owner_id && company.owner_id !== user.id) {
+      return NextResponse.json({ error: "Unauthorized - Company does not belong to your account" }, { status: 403 })
+    }
+    
+    // If company has no owner_id (legacy), claim it for the current user
+    if (!company.owner_id) {
+      await supabase
+        .from("companies")
+        .update({ owner_id: user.id })
+        .eq("id", id)
+      company.owner_id = user.id
+      console.log(`[Companies API] Claimed orphan company ${id} for user ${user.id}`)
+    }
   }
   
   if (error) {

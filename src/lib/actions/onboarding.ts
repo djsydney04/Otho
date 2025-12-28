@@ -3,8 +3,24 @@
 /**
  * Server Actions for Onboarding
  * 
- * These actions handle saving and retrieving onboarding progress,
- * using Supabase Auth for authentication and Supabase for storage.
+ * This module handles the user onboarding flow where we collect information about:
+ * - User role (Angel Investor, VC, etc.)
+ * - Investment preferences (stages, sectors, geography)
+ * - Decision-making style
+ * - AI assistant preferences
+ * 
+ * The onboarding data is stored in the users table and used to:
+ * - Personalize the AI assistant (Otho) responses
+ * - Filter relevant content in the Discover feed
+ * - Provide better deal recommendations
+ * 
+ * Flow:
+ * 1. User signs up → onboarding_status = "incomplete"
+ * 2. User completes 6-step onboarding → saves data progressively
+ * 3. User clicks "Finish" → onboarding_status = "complete"
+ * 4. OnboardingGate allows access to the app
+ * 
+ * Note: Uses upsert to handle cases where user record doesn't exist yet.
  */
 
 import { createClient } from "@/lib/supabase/server"

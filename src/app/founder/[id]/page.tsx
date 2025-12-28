@@ -18,6 +18,7 @@ import {
   LinkedInIcon,
 } from "@/components/icons"
 import { MeetingList, EmailList, CommentTimeline, DrivePicker, OthoReport } from "@/components/shared"
+import { EditFounderDialog } from "@/components/shared/edit-founder-dialog"
 import { AccountChat } from "@/components/otho/account-chat"
 import { formatRelative, syncCalendar, syncEmails, useAppStore } from "@/lib/store"
 import { formatDate, getTwitterUrl, getLinkedInUrl, getTwitterHandle } from "@/lib/utils"
@@ -57,6 +58,7 @@ export default function FounderDetailPage() {
   // State
   const [founder, setFounder] = useState<FounderWithRelations | null>(null)
   const [loading, setLoading] = useState(true)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
 
   // Fetch founder data
   useEffect(() => {
@@ -88,6 +90,27 @@ export default function FounderDetailPage() {
       setFounder(data)
     }
   }
+
+  const handleUpdateFounder = async (updates: Partial<FounderWithRelations>) => {
+    const response = await fetch(`/api/founders/${founderId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    })
+
+    if (response.ok) {
+      const data = await fetchFounder(founderId)
+      setFounder(data)
+    } else {
+      const error = await response.json()
+      throw new Error(error.error || "Failed to update founder")
+    }
+  }
+
+  // Scroll to top on mount
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [founderId])
 
   // Loading state
   if (loading) {
@@ -140,7 +163,11 @@ export default function FounderDetailPage() {
       {/* Main Content */}
       <main className="mx-auto max-w-5xl px-6 py-8">
         {/* Founder Header */}
-        <FounderHeader founder={founder} companies={companies} />
+        <FounderHeader 
+          founder={founder} 
+          companies={companies}
+          onEdit={() => setEditDialogOpen(true)}
+        />
 
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Left Column - Details & Activity */}
@@ -207,6 +234,16 @@ export default function FounderDetailPage() {
           </div>
         </div>
       </main>
+
+      {/* Edit Dialog */}
+      {founder && (
+        <EditFounderDialog
+          founder={founder}
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          onSave={handleUpdateFounder}
+        />
+      )}
     </div>
   )
 }
@@ -218,9 +255,11 @@ export default function FounderDetailPage() {
 function FounderHeader({
   founder,
   companies,
+  onEdit,
 }: {
   founder: FounderWithRelations
   companies: Company[]
+  onEdit: () => void
 }) {
   return (
     <div className="mb-8 flex items-start gap-6">
@@ -350,16 +389,25 @@ function FounderHeader({
             </a>
           )}
         </div>
-        {companies.length === 0 && (
-          <Button size="sm" asChild className="ml-auto">
-            <Link
-              href={`/add-company?founder_id=${founder.id}&founder_name=${encodeURIComponent(founder.name)}&founder_email=${encodeURIComponent(founder.email)}`}
-            >
-              <BuildingIcon className="h-4 w-4 mr-1.5" />
-              Add Company
-            </Link>
+        <div className="flex items-center gap-2 ml-auto">
+          <Button size="sm" variant="outline" onClick={onEdit}>
+            <svg className="h-4 w-4 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            Edit
           </Button>
-        )}
+          {companies.length === 0 && (
+            <Button size="sm" asChild>
+              <Link
+                href={`/add-company?founder_id=${founder.id}&founder_name=${encodeURIComponent(founder.name)}&founder_email=${encodeURIComponent(founder.email)}`}
+              >
+                <BuildingIcon className="h-4 w-4 mr-1.5" />
+                Add Company
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )

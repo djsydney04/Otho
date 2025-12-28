@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { GoogleGenerativeAI } from "@google/generative-ai"
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash-exp"
+import {
+  generateJSON,
+  isOpenRouterConfigured,
+  MODELS,
+} from "@/lib/integrations/openrouter"
 
 interface Article {
   id: string
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     // If no API key, return articles with basic scoring
-    if (!GEMINI_API_KEY) {
+    if (!isOpenRouterConfigured()) {
       const basicRanked = articles.map((article: Article, index: number) => ({
         ...article,
         relevanceScore: 1 - (index * 0.05), // Simple declining score
@@ -38,10 +39,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ articles: basicRanked, model: "none" })
     }
 
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL })
-
-    // Build prompt for ranking
+    // Build prompt for ranking - use CHEAP tier for classification
     const prompt = `You are an AI assistant helping an investor rank news articles based on their preferences and interests.
 
 USER PREFERENCES:
@@ -77,22 +75,16 @@ Return a JSON array with this structure (no markdown, just raw JSON):
 
 Only return the JSON array, nothing else.`
 
-    const result = await model.generateContent(prompt)
-    const responseText = result.response.text()
-
-    // Parse the response
     try {
-      // Clean up response - remove markdown code blocks if present
-      let jsonText = responseText.trim()
-      if (jsonText.startsWith("```")) {
-        jsonText = jsonText.replace(/```(?:json)?\s*/g, "").replace(/```\s*$/g, "")
-      }
-
-      const rankings = JSON.parse(jsonText)
+      const rankings = await generateJSON<Array<{ index: number; relevanceScore: number; reason?: string }>>(
+        "ranking",
+        prompt,
+        { temperature: 0.3 }
+      )
 
       // Merge rankings with original articles
       const rankedArticles: RankedArticle[] = articles.map((article: Article, index: number) => {
-        const ranking = rankings.find((r: { index: number }) => r.index === index)
+        const ranking = rankings.find((r) => r.index === index)
         return {
           ...article,
           relevanceScore: ranking?.relevanceScore ?? 0.5,
@@ -105,7 +97,7 @@ Only return the JSON array, nothing else.`
 
       return NextResponse.json({
         articles: rankedArticles,
-        model: GEMINI_MODEL,
+        model: MODELS.WORKER,
         totalRanked: rankedArticles.length
       })
     } catch (parseError) {

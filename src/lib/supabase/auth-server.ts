@@ -1,13 +1,33 @@
 /**
- * Server-side authentication utilities
+ * Server-Side Authentication Utilities
  * 
- * Provides helpers for getting the current user and their onboarding status.
- * Uses Supabase Auth for authentication.
+ * This module provides server-side authentication helpers for Next.js Server Components and API Routes.
+ * 
+ * Key Features:
+ * - Get authenticated user from Supabase Auth session
+ * - Auto-create user records in the database
+ * - Check onboarding status
+ * - Sync auth.users with public.users table
+ * 
+ * Usage:
+ * ```tsx
+ * // In a Server Component or API Route
+ * import { getCurrentUser, getOnboardingStatus } from '@/lib/supabase/auth-server'
+ * 
+ * const user = await getCurrentUser()
+ * if (!user) redirect('/sign-in')
+ * ```
+ * 
+ * Note: This uses Supabase's server client which handles cookies automatically.
  */
 
 import { createClient, getUser as getAuthUser } from "./server"
 import type { User } from "./types"
 
+/**
+ * Simplified auth user for display purposes
+ * Contains only the essential fields needed for UI
+ */
 export interface AuthUser {
   id: string
   email: string
@@ -15,6 +35,10 @@ export interface AuthUser {
   image?: string | null
 }
 
+/**
+ * User with onboarding fields
+ * Extends the full User type with onboarding-specific fields
+ */
 export interface UserWithOnboarding extends User {
   onboarding_status: string | null
   onboarding_step: number | null
@@ -40,8 +64,27 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 }
 
 /**
- * Get or create the user in Supabase database.
- * Ensures the user exists in the users table.
+ * Get or Create User in Database
+ * 
+ * This function ensures that every authenticated user has a corresponding record
+ * in the public.users table. This is important because:
+ * 
+ * 1. Supabase Auth stores users in auth.users (system table)
+ * 2. We need user data in public.users for:
+ *    - Onboarding status tracking
+ *    - User preferences and settings
+ *    - Relationships with companies/founders
+ * 
+ * Flow:
+ * 1. Check if user exists in public.users
+ * 2. If yes, return existing user
+ * 3. If no, create new user record with default values
+ * 4. Set onboarding_status to "incomplete" for new users
+ * 
+ * Note: There's also a database trigger (005_sync_auth_users.sql) that
+ * automatically creates users, but this provides a fallback.
+ * 
+ * @returns User record from public.users table or null if not authenticated
  */
 export async function getOrCreateUser(): Promise<User | null> {
   const authUser = await getAuthUser()
@@ -52,7 +95,7 @@ export async function getOrCreateUser(): Promise<User | null> {
   
   const supabase = await createClient()
   
-  // Try to find existing user
+  // Try to find existing user in public.users table
   const { data: existingUser, error: findError } = await supabase
     .from("users")
     .select("*")
@@ -63,8 +106,8 @@ export async function getOrCreateUser(): Promise<User | null> {
     return existingUser
   }
   
-  // Create new user if not found
-  if (findError?.code === "PGRST116") { // No rows found
+  // Create new user if not found (PGRST116 = no rows returned)
+  if (findError?.code === "PGRST116") {
     const { data: newUser, error: createError } = await supabase
       .from("users")
       .insert({
@@ -72,13 +115,14 @@ export async function getOrCreateUser(): Promise<User | null> {
         email: authUser.email!,
         name: authUser.user_metadata?.full_name || authUser.email!.split("@")[0],
         avatar_url: authUser.user_metadata?.avatar_url,
+        // Generate initials from name (e.g., "John Doe" → "JD")
         initials: (authUser.user_metadata?.full_name || authUser.email!.split("@")[0])
           .split(" ")
           .map((n: string) => n[0])
           .join("")
           .toUpperCase()
           .slice(0, 2),
-        onboarding_status: "incomplete",
+        onboarding_status: "incomplete", // New users need to complete onboarding
         onboarding_step: 0,
       })
       .select("*")

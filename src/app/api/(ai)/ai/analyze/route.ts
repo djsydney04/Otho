@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase/client"
-import { generateCompanyAnalysis, isGeminiConfigured, type CompanyContext } from "@/lib/integrations/gemini"
+import { generateCompanyAnalysis, isGeminiConfigured, type CompanyContext } from "@/lib/integrations/agent"
 
 // POST /api/ai/analyze - Generate AI analysis for a company
 export async function POST(request: NextRequest) {
   if (!isGeminiConfigured()) {
     return NextResponse.json(
-      { error: "Gemini API is not configured. Add GEMINI_API_KEY to your environment." },
+      { error: "AI is not configured. Add OPEN_ROUTER_API to your environment." },
       { status: 500 }
     )
   }
@@ -50,8 +50,8 @@ export async function POST(request: NextRequest) {
       description: company.description,
       website: company.website,
       stage: company.stage,
-      founderName: company.founder?.name || company.founder_name,
-      founderEmail: company.founder?.email || company.founder_email,
+      founderName: company.founder?.name,
+      founderEmail: company.founder?.email,
       founderLinkedIn: company.founder?.linkedin,
       founderTwitter: company.founder?.twitter,
       founderBio: company.founder?.bio,
@@ -105,4 +105,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
