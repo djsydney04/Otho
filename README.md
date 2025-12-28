@@ -14,44 +14,44 @@ A modern VC portfolio management platform for angel investors and venture capita
 
 ## Features
 
-### 🎯 Pipeline Management
+### Pipeline Management
 - **Pipeline View**: Track companies across deal stages (Researching, Qualified, Diligence, Negotiation, etc.)
 - **Kanban & Table Views**: Switch between visual kanban board and detailed table view
 - **Stage Management**: Move deals through the pipeline with drag-and-drop
 - **Tags & Filtering**: Organize and filter companies by tags, stage, and search
 
-### 👥 Founder & Company Tracking
+### Founder & Company Tracking
 - **Company Profiles**: Detailed company pages with founder info, website, stage, and tags
 - **Founder Database**: Track founders across multiple companies with background, social links, and notes
 - **Activity Timeline**: See meetings, emails, and comments in chronological order
 - **Google Drive Integration**: Attach and manage documents directly from Google Drive
 
-### 📰 Discover (AI-Powered News)
+### Discover (AI-Powered News)
 - **Curated News Feeds**: Get intelligence on breaking deals, AI frontier, market signals, and more
 - **Premium Sources**: Aggregates from The Information, Bloomberg, TechCrunch, and other top-tier publications
 - **VC-Focused Topics**: Breaking Deals, AI Frontier, Market Signals, Deep Dives, Founder Intel, and more
 - **Recent News**: Focuses on the last 3-5 days for fresh, actionable intelligence
 - **Deduplication**: Smart filtering to avoid duplicate stories
 
-### 🤖 Otho (AI Assistant)
+### Otho (AI Assistant)
 - **Portfolio Analysis**: Ask questions about your portfolio companies and founders
 - **Context-Aware**: Understands your pipeline, companies, and deal context
 - **General Intelligence**: Answers questions about investing, markets, and startups
 - **Gemini-Powered**: Built on Google's Gemini AI models
 
-### 📧 Google Integrations
+### Google Integrations
 - **Gmail Sync**: Automatically sync email threads with companies and founders
 - **Calendar Integration**: See meetings and events directly in company/founder profiles
 - **Google Drive**: Attach and manage documents from Google Drive
 - **OAuth Authentication**: Secure Google OAuth for all integrations
 
-### 🎨 Modern UI
+### Modern UI
 - **Clean Design**: Professional, minimalist interface optimized for quick scanning
 - **Collapsible Sidebar**: Maximize screen real estate when needed
 - **Responsive**: Works on desktop and tablet devices
 - **Dark Mode Ready**: Built with Tailwind CSS and theme-aware components
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 Angel Lead follows a modern, full-stack architecture with clear separation of concerns:
 
@@ -294,7 +294,7 @@ angellead/
 └── public/                      # Static assets
 ```
 
-## 🔑 Key Concepts
+## Key Concepts
 
 ### 1. Authentication & User Management
 
