@@ -52,8 +52,8 @@ function SidebarItem({ label, icon, active, href, collapsed }: SidebarItemProps)
     "flex items-center rounded-lg text-left text-sm transition-all duration-200",
     collapsed ? "w-10 h-10 justify-center" : "w-full gap-2.5 px-3 py-2",
     active
-      ? "sidebar-active"
-      : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
+      ? "bg-[rgba(212,168,83,0.1)] text-foreground font-medium border-l-2 border-[#d4a853] -ml-px pl-[calc(0.75rem+1px)]"
+      : "text-muted-foreground hover:bg-secondary hover:text-foreground",
   ].join(" ")
 
   if (href) {
@@ -69,7 +69,7 @@ function SidebarItem({ label, icon, active, href, collapsed }: SidebarItemProps)
 }
 
 interface SidebarProps {
-  activePage?: "home" | "otho" | "pipeline" | "founders" | "discover"
+  activePage?: "home" | "otho" | "pipeline" | "founders" | "discover" | "reports"
   defaultCollapsed?: boolean
   onCollapsedChange?: (collapsed: boolean) => void
 }
@@ -90,14 +90,14 @@ export function Sidebar({ activePage = "home", defaultCollapsed = false, onColla
 
   return (
     <aside 
-      className={`flex flex-col border-r bg-sidebar flex-shrink-0 transition-all duration-300 ${
+      className={`flex flex-col h-screen sticky top-0 border-r bg-sidebar flex-shrink-0 transition-all duration-300 ${
         isCollapsed ? "w-16" : "w-60"
       }`}
     >
       {/* Header */}
       <div className={`flex h-14 items-center border-b ${isCollapsed ? "justify-center px-2" : "justify-between px-4"}`}>
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-semibold flex-shrink-0">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#d4a853] text-white text-sm font-semibold flex-shrink-0">
             O
           </div>
           {!isCollapsed && (
@@ -166,6 +166,17 @@ export function Sidebar({ activePage = "home", defaultCollapsed = false, onColla
             icon={<UsersIcon className="h-4 w-4 flex-shrink-0" />}
             active={activePage === "founders"}
             href="/founders"
+            collapsed={isCollapsed}
+          />
+          <SidebarItem 
+            label="Reports" 
+            icon={
+              <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            }
+            active={activePage === "reports"}
+            href="/reports"
             collapsed={isCollapsed}
           />
         </div>

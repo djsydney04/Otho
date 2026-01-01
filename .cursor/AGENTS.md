@@ -188,29 +188,7 @@ If the agent produces JSON:
 - DB schema/migrations: `./supabase/migrations` or `./prisma`
 - Shared libs: `./lib`, `./packages/*`
 - Evals: `./evals`
-- Agent policies: `./.agents`
-
----
-
-## 9) Pinecone (Vector Database)
-
-⚠️ **MANDATORY: If you need to help with Pinecone, vector databases, embeddings, semantic search, RAG, or recommendations, you MUST read `.agents/PINECONE.md` first** to determine:
-
-- What questions to ask the user
-- How to select the programming language
-- Which guide files to consult for implementation details
-
-Do not proceed with Pinecone-related tasks without consulting the appropriate guide files. Use `.agents/PINECONE.md` as your entry point and follow its "Choosing the Right Guide" section to navigate to the appropriate resources.
-
-### Pinecone Instructions Catalog
-- @./.agents/PINECONE.md
-- @./.agents/PINECONE-cli.md
-- @./.agents/PINECONE-python.md
-- @./.agents/PINECONE-typescript.md
-- @./.agents/PINECONE-go.md
-- @./.agents/PINECONE-java.md
-- @./.agents/PINECONE-quickstart.md
-- @./.agents/PINECONE-troubleshooting.md
+- Agent policies: `./.cursor/agents`
 
 ---
 
@@ -253,3 +231,24 @@ When ambiguity exists:
 - **Fix:**
 - **Regression test:**
 - **Validation:**
+
+## 13) README Updates
+
+If a change alters:
+- public behavior
+- usage
+- configuration
+- onboarding
+
+The README MUST be updated in the same PR.
+
+DO NOT MAKE SEPERATE DOCS EXPLAINING WHAT IS CHANGED
+
+---
+
+## 14) Required Self-Check
+
+Before responding or submitting code, the agent should confirm:
+- Which sections of this file were applied
+- Any assumptions made
+- What validates correctness (tests, evals, repro steps)

@@ -3,20 +3,27 @@
  * 
  * Tiered model system:
  * - CHEAP: gpt-oss-20b - tagging, classification, dedupe, entity extraction
- * - WORKER: gpt-oss-120b - analysis drafts, summaries, structured outputs
- * - PREMIUM: claude-sonnet-4.5 - user-facing decisions, strategy, reasoning
+ * - WORKER: gpt-oss-20b - analysis drafts, summaries, structured outputs
+ * - PREMIUM: gpt-oss-20b - user-facing decisions, strategy, reasoning
  */
 
 const OPENROUTER_API_KEY = process.env.OPEN_ROUTER_API
 
-// Model tiers
+// Model tiers - Using OpenAI's free gpt-oss-20b model
 export const MODELS = {
   // Cheap + fast "chores" - tagging, classification, dedupe, entity extraction
   CHEAP: "openai/gpt-oss-20b",
-  // Mid-tier "worker brain" - analysis drafts, summaries, structured outputs
-  WORKER: "openai/gpt-oss-120b",
+  // Mid-tier "worker brain" - analysis drafts, summaries, structured outputs  
+  WORKER: "openai/gpt-oss-20b",
   // Premium "Otho judgment" - user-facing decisions, strategy, reasoning
-  PREMIUM: "anthropic/claude-sonnet-4.5",
+  PREMIUM: "openai/gpt-oss-20b",
+} as const
+
+// Fallback models if primary fails
+export const FALLBACK_MODELS = {
+  CHEAP: "meta-llama/llama-3.2-3b-instruct:free",
+  WORKER: "mistralai/mistral-7b-instruct:free",
+  PREMIUM: "nousresearch/hermes-3-llama-3.1-405b:free",
 } as const
 
 export type ModelTier = keyof typeof MODELS
@@ -111,12 +118,33 @@ export function isOpenRouterConfigured(): boolean {
 
 /**
  * Main chat completion function
+ * Supports two call signatures:
+ * 1. chatCompletion(options: ChatCompletionOptions)
+ * 2. chatCompletion(model: string, messages: Message[], options?: {...})
  */
 export async function chatCompletion(
-  options: ChatCompletionOptions
+  optionsOrModel: ChatCompletionOptions | string,
+  messagesArg?: Message[],
+  optionsArg?: { temperature?: number; max_tokens?: number; maxTokens?: number; reasoning?: { enabled: boolean } }
 ): Promise<ChatCompletionResponse> {
   if (!OPENROUTER_API_KEY) {
     throw new Error("OPEN_ROUTER_API is not configured")
+  }
+
+  // Handle overloaded signatures
+  let options: ChatCompletionOptions
+  if (typeof optionsOrModel === "string") {
+    // Called with (model, messages, options?)
+    options = {
+      model: optionsOrModel,
+      messages: messagesArg || [],
+      temperature: optionsArg?.temperature,
+      maxTokens: optionsArg?.max_tokens || optionsArg?.maxTokens,
+      reasoning: optionsArg?.reasoning,
+    }
+  } else {
+    // Called with (options)
+    options = optionsOrModel
   }
 
   const {
@@ -147,35 +175,88 @@ export async function chatCompletion(
     body.response_format = responseFormat
   }
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-      "X-Title": "AngelLead",
-    },
-    body: JSON.stringify(body),
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`OpenRouter API error: ${response.status} - ${error}`)
+  // Try primary model first, then fallbacks
+  const modelsToTry = [model]
+  
+  // Add fallback models if using a primary model
+  if (model === MODELS.CHEAP && FALLBACK_MODELS.CHEAP !== model) {
+    modelsToTry.push(FALLBACK_MODELS.CHEAP)
+  } else if (model === MODELS.WORKER && FALLBACK_MODELS.WORKER !== model) {
+    modelsToTry.push(FALLBACK_MODELS.WORKER)
+  } else if (model === MODELS.PREMIUM && FALLBACK_MODELS.PREMIUM !== model) {
+    modelsToTry.push(FALLBACK_MODELS.PREMIUM)
   }
 
-  const result = await response.json()
-  const choice = result.choices?.[0]
+  let lastError: Error | null = null
 
-  if (!choice) {
-    throw new Error("No response from OpenRouter")
+  for (const currentModel of modelsToTry) {
+    try {
+      body.model = currentModel
+      
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+          "X-Title": "Otho",
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        let errorMessage = `OpenRouter API error: ${response.status}`
+        
+        try {
+          const errorData = JSON.parse(errorText)
+          if (errorData.error?.message) {
+            if (response.status === 402) {
+              throw new Error("OpenRouter credits exhausted. Please add credits at https://openrouter.ai/settings/credits")
+            } else if (response.status === 503 || errorData.error.message.includes("overloaded")) {
+              // Model overloaded, try fallback
+              console.warn(`[OpenRouter] Model ${currentModel} overloaded, trying fallback...`)
+              lastError = new Error(`Model ${currentModel} overloaded`)
+              continue
+            } else {
+              errorMessage = errorData.error.message
+            }
+          }
+          console.error("[OpenRouter Error]", JSON.stringify(errorData, null, 2))
+        } catch (e) {
+          if (e instanceof Error && e.message.includes("credits exhausted")) {
+            throw e
+          }
+          errorMessage = errorText || errorMessage
+        }
+        
+        lastError = new Error(errorMessage)
+        continue // Try next model
+      }
+
+      const result = await response.json()
+      const choice = result.choices?.[0]
+
+      if (!choice) {
+        lastError = new Error("No response from OpenRouter")
+        continue
+      }
+
+      return {
+        content: choice.message?.content || "",
+        reasoning_details: choice.message?.reasoning_details,
+        model: result.model || currentModel,
+        usage: result.usage,
+      }
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e))
+      console.warn(`[OpenRouter] Model ${currentModel} failed:`, lastError.message)
+      // Continue to next model
+    }
   }
 
-  return {
-    content: choice.message?.content || "",
-    reasoning_details: choice.message?.reasoning_details,
-    model: result.model || model,
-    usage: result.usage,
-  }
+  // All models failed
+  throw lastError || new Error("All OpenRouter models failed")
 }
 
 /**

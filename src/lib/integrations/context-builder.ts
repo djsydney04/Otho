@@ -41,6 +41,8 @@ export interface ContextBuilderParams {
   message: string
   companyId?: string
   companyName?: string
+  companyWebsite?: string       // Used for more accurate web search
+  companyDescription?: string   // Used to filter irrelevant sources
   founderId?: string
   founderName?: string
   includeWebSearch?: boolean
@@ -56,6 +58,8 @@ export async function buildContext(params: ContextBuilderParams): Promise<Contex
     message,
     companyId,
     companyName,
+    companyWebsite,
+    companyDescription,
     founderId,
     founderName,
     includeWebSearch = true,
@@ -88,6 +92,8 @@ export async function buildContext(params: ContextBuilderParams): Promise<Contex
     try {
       const webResults = await searchWeb({
         companyName,
+        companyWebsite,
+        companyDescription,
         founderName,
         query: message,
       })
@@ -146,18 +152,29 @@ async function searchPinecone(params: PineconeSearchParams): Promise<Source[]> {
   }
 
   try {
-    const results = await index.namespace(namespace).searchRecords({
-      query: {
-        topK: topK * 2, // Get more for reranking
-        inputs: { text: query },
-        filter: Object.keys(filter).length > 1 ? filter : undefined,
-      },
-      rerank: {
-        model: "bge-reranker-v2-m3",
-        topN: topK,
-        rankFields: ["content"],
-      },
-    })
+    // Wrap in try-catch to handle index not found errors gracefully
+    let results
+    try {
+      results = await index.namespace(namespace).searchRecords({
+        query: {
+          topK: topK * 2, // Get more for reranking
+          inputs: { text: query },
+          filter: Object.keys(filter).length > 1 ? filter : undefined,
+        },
+        rerank: {
+          model: "bge-reranker-v2-m3",
+          topN: topK,
+          rankFields: ["content"],
+        },
+      })
+    } catch (searchError: any) {
+      // Handle Pinecone index not found - return empty results
+      if (searchError.message?.includes("404") || searchError.name?.includes("NotFound")) {
+        console.log("[Pinecone Search] Index not found, skipping internal search")
+        return []
+      }
+      throw searchError
+    }
 
     const sources: Source[] = []
 
@@ -189,8 +206,9 @@ async function searchPinecone(params: PineconeSearchParams): Promise<Source[]> {
     }
 
     return sources
-  } catch (e) {
-    console.error("[Pinecone Search] Error:", e)
+  } catch (e: any) {
+    // Gracefully handle all Pinecone errors - reports should still work without internal context
+    console.warn("[Pinecone Search] Error (non-fatal):", e?.message || e)
     return []
   }
 }
@@ -201,68 +219,108 @@ async function searchPinecone(params: PineconeSearchParams): Promise<Source[]> {
 
 interface WebSearchParams {
   companyName?: string
+  companyWebsite?: string
+  companyDescription?: string
   founderName?: string
   query: string
 }
 
 async function searchWeb(params: WebSearchParams): Promise<Source[]> {
-  const { companyName, founderName, query } = params
+  const { companyName, companyWebsite, companyDescription, founderName, query } = params
 
   if (!isExaConfigured()) return []
 
   const sources: Source[] = []
   const searchQueries: string[] = []
 
-  // Build search queries based on entity type
+  // Extract domain from website for more accurate searches
+  let domain: string | undefined
+  if (companyWebsite) {
+    try {
+      const url = new URL(companyWebsite.startsWith("http") ? companyWebsite : `https://${companyWebsite}`)
+      domain = url.hostname.replace("www.", "")
+    } catch {
+      // Ignore invalid URLs
+    }
+  }
+
+  // Extract key terms from description for disambiguation
+  const descriptionKeywords = companyDescription
+    ? extractKeyTerms(companyDescription)
+    : []
+
+  // Build highly targeted search queries
   if (companyName) {
+    // Primary: Search with domain for exact company match
+    if (domain) {
+      searchQueries.push(
+        `site:${domain}`,
+        `"${companyName}" site:${domain}`,
+      )
+    }
+
+    // Secondary: Search with company name + unique description terms
+    if (descriptionKeywords.length > 0) {
+      const keyTerms = descriptionKeywords.slice(0, 3).join(" ")
+      searchQueries.push(
+        `"${companyName}" ${keyTerms}`,
+        `"${companyName}" ${keyTerms} company startup`,
+      )
+    }
+
+    // Founder name helps disambiguate significantly
+    if (founderName) {
+      searchQueries.push(
+        `"${companyName}" "${founderName}" founder`,
+        `"${companyName}" "${founderName}" startup company`,
+      )
+    }
+
+    // General searches (lower priority)
     searchQueries.push(
-      `"${companyName}" official website`,
-      `"${companyName}" funding round investment`,
-      `"${companyName}" news startup`,
-      `"${companyName}" product pricing`,
+      `"${companyName}" funding round investment 2024`,
+      `"${companyName}" company startup news`,
     )
   }
 
+  // Founder-specific searches
   if (founderName) {
+    if (companyName) {
+      searchQueries.push(
+        `"${founderName}" "${companyName}" founder CEO`,
+      )
+    }
     searchQueries.push(
-      `"${founderName}" founder entrepreneur`,
-      `"${founderName}" background startup`,
+      `"${founderName}" founder entrepreneur background`,
+      `"${founderName}" startup CEO interview`,
     )
   }
 
-  // If user query seems to need specific info, add targeted search
-  if (query.match(/competitor|market|similar|alternative/i)) {
-    const entity = companyName || founderName
-    if (entity) searchQueries.push(`"${entity}" competitors market`)
-  }
-
-  if (query.match(/pricing|cost|subscription|plan/i)) {
-    if (companyName) searchQueries.push(`"${companyName}" pricing plans`)
-  }
-
-  if (query.match(/funding|raise|invest|valuation/i)) {
-    if (companyName) searchQueries.push(`"${companyName}" funding series valuation`)
-  }
-
-  // Run searches (limit to 3 queries to avoid rate limits)
-  const queriesToRun = searchQueries.slice(0, 3)
+  // Run targeted searches (up to 5 queries)
+  const queriesToRun = searchQueries.slice(0, 5)
 
   for (const searchQuery of queriesToRun) {
     try {
       const results = await exaSearch({
         query: searchQuery,
-        numResults: 3,
+        numResults: 4,
         useAutoprompt: false,
         type: "neural",
         contents: {
-          text: { maxCharacters: 1000 },
-          highlights: { numSentences: 3 },
+          text: { maxCharacters: 1500 },
+          highlights: { numSentences: 5 },
         },
       })
 
       for (const result of results) {
         // Avoid duplicates
         if (sources.some((s) => s.url === result.url)) continue
+
+        // CRITICAL: Filter out sources that don't match the company
+        if (!isSourceRelevant(result, companyName, domain, descriptionKeywords, founderName)) {
+          console.log(`[Web Search] Filtered irrelevant source: ${result.url}`)
+          continue
+        }
 
         sources.push({
           id: result.id,
@@ -283,8 +341,103 @@ async function searchWeb(params: WebSearchParams): Promise<Source[]> {
     }
   }
 
-  // Limit to top 8 web results
-  return sources.slice(0, 8)
+  // Limit to top 10 verified results
+  return sources.slice(0, 10)
+}
+
+/**
+ * Extract key unique terms from description for disambiguation
+ */
+function extractKeyTerms(description: string): string[] {
+  // Common words to exclude
+  const stopWords = new Set([
+    "the", "a", "an", "and", "or", "but", "is", "are", "was", "were",
+    "be", "been", "being", "have", "has", "had", "do", "does", "did",
+    "will", "would", "could", "should", "may", "might", "must",
+    "for", "of", "to", "in", "on", "at", "by", "with", "from",
+    "that", "this", "it", "its", "their", "our", "your", "we", "they",
+    "company", "startup", "business", "platform", "solution", "solutions",
+    "technology", "software", "service", "services"
+  ])
+
+  return description
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(word => word.length > 3 && !stopWords.has(word))
+    .slice(0, 10) // Top 10 unique terms
+}
+
+/**
+ * Check if a source is actually relevant to the company
+ * This prevents mixing up companies with similar names
+ */
+function isSourceRelevant(
+  result: ExaSearchResult,
+  companyName?: string,
+  domain?: string,
+  descriptionKeywords?: string[],
+  founderName?: string
+): boolean {
+  const url = result.url.toLowerCase()
+  const title = (result.title || "").toLowerCase()
+  const text = (result.text || "").toLowerCase()
+  const combined = `${title} ${text}`
+
+  // High confidence: URL matches company domain
+  if (domain && url.includes(domain.toLowerCase())) {
+    return true
+  }
+
+  // High confidence: Both company name AND founder name appear
+  if (companyName && founderName) {
+    const hasCompany = combined.includes(companyName.toLowerCase())
+    const hasFounder = combined.includes(founderName.toLowerCase().split(" ")[0])
+    if (hasCompany && hasFounder) {
+      return true
+    }
+  }
+
+  // Medium confidence: Company name + multiple description keywords
+  if (companyName && descriptionKeywords && descriptionKeywords.length > 0) {
+    const hasCompany = combined.includes(companyName.toLowerCase())
+    const keywordMatches = descriptionKeywords.filter(kw => combined.includes(kw)).length
+    if (hasCompany && keywordMatches >= 2) {
+      return true
+    }
+  }
+
+  // Check for common disambiguators - reject sources about clearly different companies
+  // These patterns suggest a DIFFERENT company with similar name
+  const differentCompanyIndicators = [
+    /acquired (?:on|in) (?:19|200[0-9]|201[0-5])/, // Old acquisitions
+    /therapeutics|pharmaceutical|biotech|medical/i, // Different industry
+    /(?:raised|funding).*\$\d+[mb].*(?:19|200[0-9]|201[0-5])/, // Old funding
+  ]
+
+  for (const pattern of differentCompanyIndicators) {
+    if (pattern.test(combined)) {
+      // Unless our description also mentions these terms
+      const descText = (descriptionKeywords || []).join(" ").toLowerCase()
+      if (pattern.test(descText)) {
+        continue // Our company does match this pattern, keep it
+      }
+      return false // Different company
+    }
+  }
+
+  // Low confidence: Just has company name - allow but flag in logs
+  if (companyName && combined.includes(companyName.toLowerCase())) {
+    return true
+  }
+
+  // Founder name only - allow for founder-specific searches
+  if (founderName && combined.includes(founderName.toLowerCase().split(" ")[0])) {
+    return true
+  }
+
+  // No clear match - reject
+  return false
 }
 
 function categorizeWebSource(result: ExaSearchResult): string {

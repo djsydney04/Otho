@@ -59,7 +59,11 @@ export function OthoReport({ companyId, founderId, initialInsights, name, websit
         }),
       })
 
-      if (!response.ok) throw new Error("Failed to generate insights")
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error("Failed to generate insights:", response.status, errorData)
+        throw new Error(errorData.error || "Failed to generate insights")
+      }
       
       const data = await response.json()
       setInsights(data.analysis || null)

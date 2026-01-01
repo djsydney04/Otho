@@ -211,12 +211,12 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
             
             {/* Otho Chat Trigger - Hero */}
-            <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-background to-accent/5 overflow-hidden">
+            <Card className="border-[#d4a853]/30 bg-gradient-to-br from-[rgba(212,168,83,0.05)] via-background to-background overflow-hidden">
               <CardContent className="p-6">
                 <div className="max-w-2xl">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                      <span className="text-primary-foreground text-sm font-semibold">O</span>
+                    <div className="h-8 w-8 rounded-lg bg-[#d4a853] flex items-center justify-center">
+                      <span className="text-white text-sm font-semibold">O</span>
                     </div>
                     <h2 className="font-display text-lg font-semibold">Ask Otho</h2>
                   </div>
@@ -236,7 +236,7 @@ export default function HomePage() {
                         }
                       }}
                       placeholder="Ask about your pipeline, research a company, or get deal advice..."
-                      className="w-full rounded-xl border bg-background/80 backdrop-blur-sm shadow-sm pl-11 pr-24 py-3 text-sm transition-all placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-primary/20 focus:outline-none focus:bg-background"
+                      className="w-full rounded-xl border bg-background/80 backdrop-blur-sm shadow-sm pl-11 pr-24 py-3 text-sm transition-all placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-[#d4a853]/30 focus:border-[#d4a853]/50 focus:outline-none focus:bg-background"
                     />
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
                       <kbd className="hidden sm:inline-flex h-6 items-center gap-1 rounded border bg-muted px-2 text-[10px] font-medium text-muted-foreground">
@@ -244,7 +244,7 @@ export default function HomePage() {
                       </kbd>
                       <Button 
                         size="sm" 
-                        className="h-8 px-3 rounded-lg"
+                        className="h-8 px-3 rounded-lg bg-[#d4a853] hover:bg-[#c4983d] text-white"
                         onClick={handleStartChat} 
                       >
                         <ArrowRightIcon className="h-4 w-4" />

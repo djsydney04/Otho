@@ -28,13 +28,21 @@ export async function GET(request: NextRequest) {
     ]
     
     // Try Clearbit first as it provides high quality logos
-    const clearbitResponse = await fetch(logoSources[0], { method: 'HEAD' })
-    
-    if (clearbitResponse.ok) {
-      return NextResponse.json({ 
-        logoUrl: logoSources[0],
-        source: 'clearbit'
+    try {
+      const clearbitResponse = await fetch(logoSources[0], { 
+        method: 'HEAD',
+        signal: AbortSignal.timeout(3000) // 3 second timeout
       })
+      
+      if (clearbitResponse.ok) {
+        return NextResponse.json({ 
+          logoUrl: logoSources[0],
+          source: 'clearbit'
+        })
+      }
+    } catch (clearbitError) {
+      // Clearbit failed, continue to fallback
+      console.log("Clearbit logo fetch failed, using fallback")
     }
     
     // Fall back to Google favicon

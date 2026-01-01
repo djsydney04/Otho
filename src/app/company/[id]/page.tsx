@@ -29,7 +29,7 @@ import {
   LinkedInIcon,
   GoogleCalendarIcon,
 } from "@/components/icons"
-import { MeetingList, EmailList, CommentTimeline, DrivePicker, OthoReport } from "@/components/shared"
+import { MeetingList, EmailList, CommentTimeline, DrivePicker, OthoReport, ReportsWidget } from "@/components/shared"
 import { AccountChat } from "@/components/otho/account-chat"
 import {
   useAppStore,
@@ -73,6 +73,19 @@ export default function CompanyDetailPage() {
         .catch(() => {})
     }
   }, [company?.website])
+
+  // Scroll to top on mount - aggressive approach
+  useEffect(() => {
+    // Immediate scroll
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+    
+    // Also scroll after a short delay to override any other scroll behavior
+    const timer = setTimeout(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+    }, 100)
+    
+    return () => clearTimeout(timer)
+  }, [companyId])
 
   // Fetch company data
   useEffect(() => {
@@ -193,6 +206,12 @@ export default function CompanyDetailPage() {
               name={company.name}
               initialInsights={company.ai_analysis}
               website={company.website}
+            />
+
+            {/* Reports Widget */}
+            <ReportsWidget 
+              companyId={company.id}
+              companyName={company.name}
             />
 
             {/* Founder Card */}

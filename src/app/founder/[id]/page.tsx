@@ -60,6 +60,19 @@ export default function FounderDetailPage() {
   const [loading, setLoading] = useState(true)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
 
+  // Scroll to top on mount - aggressive approach
+  useEffect(() => {
+    // Immediate scroll
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+    
+    // Also scroll after a short delay to override any other scroll behavior
+    const timer = setTimeout(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+    }, 100)
+    
+    return () => clearTimeout(timer)
+  }, [founderId])
+
   // Fetch founder data
   useEffect(() => {
     async function loadFounder() {
