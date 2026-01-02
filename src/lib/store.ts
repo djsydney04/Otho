@@ -34,7 +34,7 @@ import type {
 
 // Re-export types and constants for convenience across the app
 export type { Stage, Company, Founder, User, Comment, Tag, CalendarEvent, EmailThread, CompanyWithRelations }
-export { STAGES, STAGE_CLASSES, formatRelative } from './constants'
+export { STAGES, STAGE_CLASSES, formatRelative } from './pipeline'
 
 /**
  * Calendar Sync Result

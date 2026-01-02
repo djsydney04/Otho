@@ -2,16 +2,13 @@ import { NextResponse } from "next/server"
 import { createClient as createServerSupabaseClient } from "@/lib/supabase/server"
 import { getPersonalizedPrompt } from "@/lib/personalization"
 import {
-  chatCompletion,
-  isOpenRouterConfigured,
-  MODELS,
-  type Message,
-} from "@/lib/integrations/openrouter"
-import {
+  simpleCompletion,
+  isAIConfigured,
+  MODEL_CONFIG,
   buildContext,
   getCitationSystemPrompt,
   persistWebDocument,
-} from "@/lib/integrations/context-builder"
+} from "@/lib/ai"
 
 interface IncomingMessage {
   role: "user" | "assistant"
@@ -32,7 +29,7 @@ export async function POST(request: Request) {
       founderId?: string
     } = await request.json()
 
-    if (!isOpenRouterConfigured()) {
+    if (!isAIConfigured()) {
       return NextResponse.json({
         reply: "Please add OPEN_ROUTER_API to your .env.local file to enable Otho. You can get an API key from https://openrouter.ai/keys",
       })
@@ -302,33 +299,22 @@ When referencing companies:
 CURRENT SCREEN:
 ${pageContext || "Dashboard"}`
 
-    // Build messages for OpenRouter
-    const chatHistory: Message[] = messages.slice(0, -1).map((msg) => ({
-      role: msg.role === "user" ? "user" : "assistant",
-      content: msg.content,
-    }))
+    // Build conversation context for LangChain
+    const chatHistory = messages.slice(0, -1).map((msg) => 
+      `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`
+    ).join("\n\n")
 
-    // Get the last user message
-    const userPrompt = messages.length === 1
-      ? lastMessage
+    // Build full prompt with conversation history
+    const fullPrompt = chatHistory
+      ? `Previous conversation:\n${chatHistory}\n\nUser: ${lastMessage}`
       : lastMessage
 
-    // All messages including system
-    const allMessages: Message[] = [
-      { role: "system", content: systemPrompt },
-      ...chatHistory,
-      { role: "user", content: userPrompt },
-    ]
-
-    // Call OpenRouter with Premium model for user-facing chat
-    const result = await chatCompletion({
-      model: MODELS.PREMIUM,
-      messages: allMessages,
+    // Call LangChain with Premium tier for user-facing chat
+    const rawReply = await simpleCompletion(fullPrompt, {
+      systemPrompt,
+      task: "chat",
       temperature: 0.7,
-      maxTokens: 1024,
     })
-
-    const rawReply = result.content
 
     // Parse out tool calls and company references
     let reply = rawReply
@@ -567,7 +553,7 @@ ${pageContext || "Dashboard"}`
       proposedAction, 
       insightsSaved: !!companyId,
       companyReferences: companyReferences.length > 0 ? companyReferences : undefined,
-      model: result.model,
+      model: MODEL_CONFIG.PREMIUM,
       sourcesUsed: contextPack ? {
         internal: contextPack.internalSources.length,
         external: contextPack.externalSources.length,

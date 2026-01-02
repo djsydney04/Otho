@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { generateCompanyAnalysis, isGeminiConfigured, type CompanyContext } from "@/lib/integrations/agent"
+import { generateCompanyAnalysis, isAIConfigured, type CompanyContext } from "@/lib/ai"
 
 // POST /api/ai/analyze - Generate AI analysis for a company or founder
 export async function POST(request: NextRequest) {
-  if (!isGeminiConfigured()) {
+  if (!isAIConfigured()) {
     return NextResponse.json(
       { error: "AI is not configured. Add OPEN_ROUTER_API to your environment." },
       { status: 500 }

@@ -21,7 +21,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { generateCompanyAnalysis, isGeminiConfigured, type CompanyContext } from "@/lib/integrations/agent"
+import { generateCompanyAnalysis, isAIConfigured, type CompanyContext } from "@/lib/ai"
 import type { CompanyInsert } from "@/lib/supabase/types"
 import { canCreateContact } from "@/lib/tiers"
 
@@ -44,7 +44,7 @@ import { canCreateContact } from "@/lib/tiers"
  */
 async function generateAnalysisInBackground(companyId: string, context: CompanyContext) {
   try {
-    if (!isGeminiConfigured()) {
+    if (!isAIConfigured()) {
       console.log("[AI Analysis] Gemini not configured, skipping")
       return
     }
@@ -348,7 +348,7 @@ export async function POST(request: NextRequest) {
     })
     
     // Generate AI analysis in background (non-blocking)
-    if (company && isGeminiConfigured()) {
+    if (company && isAIConfigured()) {
       const context: CompanyContext = {
         name: company.name,
         description: company.description || "",

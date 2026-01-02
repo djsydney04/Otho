@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { fetchEmails, matchEmailsWithFounders } from "@/lib/integrations/google/gmail"
-import { MOCK_FOUNDERS } from "@/lib/mocks/pipeline"
+import { createClient } from "@/lib/supabase/server"
 
 // GET /api/gmail/messages - Fetch emails
 export async function GET(request: NextRequest) {
@@ -27,8 +27,16 @@ export async function GET(request: NextRequest) {
     })
 
     if (matchFounders) {
-      const founderEmails = MOCK_FOUNDERS.filter(f => f.email).map((f) => f.email!)
+      // Get founder emails from database
+      const supabase = await createClient()
+      const { data: founders } = await supabase
+        .from("founders")
+        .select("email")
+        .not("email", "is", null)
+      
+      const founderEmails = founders?.map(f => f.email!).filter(Boolean) || []
       const matched = matchEmailsWithFounders(emails, founderEmails)
+      
       return NextResponse.json({
         emails: matched,
         total: matched.length,
@@ -48,4 +56,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-

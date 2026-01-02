@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import {
-  generateJSON,
-  isOpenRouterConfigured,
-  MODELS,
-} from "@/lib/integrations/openrouter"
+import { structuredCompletion, isAIConfigured, MODEL_CONFIG } from "@/lib/ai"
+import { z } from "zod"
 
 interface Article {
   id: string
@@ -19,6 +16,12 @@ interface RankedArticle extends Article {
   reason?: string
 }
 
+const RankingSchema = z.array(z.object({
+  index: z.number(),
+  relevanceScore: z.number(),
+  reason: z.string().optional(),
+}))
+
 // POST /api/rank - Rank articles based on user preferences using LLM
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     // If no API key, return articles with basic scoring
-    if (!isOpenRouterConfigured()) {
+    if (!isAIConfigured()) {
       const basicRanked = articles.map((article: Article, index: number) => ({
         ...article,
         relevanceScore: 1 - (index * 0.05), // Simple declining score
@@ -39,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ articles: basicRanked, model: "none" })
     }
 
-    // Build prompt for ranking - use CHEAP tier for classification
+    // Build prompt for ranking
     const prompt = `You are an AI assistant helping an investor rank news articles based on their preferences and interests.
 
 USER PREFERENCES:
@@ -64,23 +67,20 @@ Consider:
 - Source credibility
 - Actionable insights for investors
 
-Return a JSON array with this structure (no markdown, just raw JSON):
+Return a JSON array with this structure:
 [
   {
     "index": 0,
     "relevanceScore": 0.95,
     "reason": "Brief explanation why this is relevant"
   }
-]
-
-Only return the JSON array, nothing else.`
+]`
 
     try {
-      const rankings = await generateJSON<Array<{ index: number; relevanceScore: number; reason?: string }>>(
-        "ranking",
-        prompt,
-        { temperature: 0.3 }
-      )
+      const rankings = await structuredCompletion(prompt, RankingSchema, {
+        task: "ranking",
+        temperature: 0.3,
+      })
 
       // Merge rankings with original articles
       const rankedArticles: RankedArticle[] = articles.map((article: Article, index: number) => {
@@ -97,7 +97,7 @@ Only return the JSON array, nothing else.`
 
       return NextResponse.json({
         articles: rankedArticles,
-        model: MODELS.WORKER,
+        model: MODEL_CONFIG.WORKER,
         totalRanked: rankedArticles.length
       })
     } catch (parseError) {

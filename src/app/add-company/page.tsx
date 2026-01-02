@@ -1,33 +1,22 @@
 "use client"
 
-import { useState, useEffect, useMemo, Suspense } from "react"
+import { useState, useEffect, useMemo, Suspense, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Sidebar } from "@/components/pipeline/sidebar"
-import { ArrowLeftIcon, SearchIcon } from "@/components/pipeline/icons"
 import { useAppStore, STAGES, type Stage, type Founder } from "@/lib/store"
-import { Checkbox } from "@/components/ui/checkbox"
+import { cn } from "@/lib/utils"
 
 interface FounderInput {
-  id: string // 'new' for new founders, actual ID for existing
+  id: string
   name: string
   email: string
   role_title?: string
-  linkedin?: string
-  twitter?: string
   isExisting?: boolean
 }
 
@@ -35,191 +24,82 @@ function AddCompanyForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { tags, founders, addCompany, fetchTags, fetchFounders } = useAppStore()
+  const nameInputRef = useRef<HTMLInputElement>(null)
   
-  // Get pre-selected founder from URL params
   const preSelectedFounderId = searchParams.get("founder_id")
   const preSelectedFounderName = searchParams.get("founder_name")
   const preSelectedFounderEmail = searchParams.get("founder_email")
   
+  const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     website: "",
     stage: "Inbound" as Stage,
     tags: [] as string[],
-    is_priority: false,
-    needs_diligence: false,
-    needs_followup: false,
-    owner: "",
-    notes: "",
   })
   
-  const [foundersList, setFoundersList] = useState<FounderInput[]>(() => {
-    // Initialize with pre-selected founder if provided
+  const [founder, setFounder] = useState<FounderInput | null>(() => {
     if (preSelectedFounderId && preSelectedFounderName && preSelectedFounderEmail) {
-      return [{
+      return {
         id: preSelectedFounderId,
         name: preSelectedFounderName,
         email: preSelectedFounderEmail,
         isExisting: true,
-      }]
+      }
     }
-    return []
+    return null
   })
   
   const [saving, setSaving] = useState(false)
   const [founderSearch, setFounderSearch] = useState("")
-  const [showFounderSearch, setShowFounderSearch] = useState(false)
-  const [newFounderForm, setNewFounderForm] = useState<Partial<FounderInput>>({
-    name: "",
-    email: "",
-    role_title: "",
-    linkedin: "",
-    twitter: "",
-  })
-  const [showNewFounderForm, setShowNewFounderForm] = useState(false)
-  
-  // Custom fields state
-  const [customFields, setCustomFields] = useState<Array<{
-    id: string
-    name: string
-    value: string
-    type: 'text' | 'url' | 'email' | 'date' | 'number'
-  }>>([])
-  const [showAddCustomField, setShowAddCustomField] = useState(false)
-  const [newCustomFieldName, setNewCustomFieldName] = useState("")
-  const [newCustomFieldType, setNewCustomFieldType] = useState<'text' | 'url' | 'email' | 'date' | 'number'>('text')
-  
-  const addCustomField = () => {
-    if (!newCustomFieldName.trim()) return
-    setCustomFields([
-      ...customFields,
-      { id: crypto.randomUUID(), name: newCustomFieldName.trim(), value: '', type: newCustomFieldType }
-    ])
-    setNewCustomFieldName("")
-    setNewCustomFieldType('text')
-    setShowAddCustomField(false)
-  }
-  
-  const updateCustomField = (id: string, value: string) => {
-    setCustomFields(customFields.map(f => f.id === id ? { ...f, value } : f))
-  }
-  
-  const removeCustomField = (id: string) => {
-    setCustomFields(customFields.filter(f => f.id !== id))
-  }
+  const [showFounderDropdown, setShowFounderDropdown] = useState(false)
+  const [newFounder, setNewFounder] = useState({ name: "", email: "" })
   
   useEffect(() => {
     fetchTags()
     fetchFounders()
   }, [fetchTags, fetchFounders])
   
+  useEffect(() => {
+    // Auto-focus name input on mount
+    setTimeout(() => nameInputRef.current?.focus(), 100)
+  }, [])
+  
   const filteredFounders = useMemo(() => {
-    if (!founderSearch.trim()) return founders.slice(0, 5)
+    if (!founderSearch.trim()) return founders.slice(0, 6)
     const q = founderSearch.toLowerCase()
     return founders.filter(f => 
-      (f.name.toLowerCase().includes(q) || f.email.toLowerCase().includes(q)) &&
-      !foundersList.some(fl => fl.id === f.id)
-    ).slice(0, 5)
-  }, [founders, founderSearch, foundersList])
+      f.name.toLowerCase().includes(q) || f.email.toLowerCase().includes(q)
+    ).slice(0, 6)
+  }, [founders, founderSearch])
   
-  const addExistingFounder = (founder: Founder) => {
-    setFoundersList(prev => [...prev, {
-      id: founder.id,
-      name: founder.name,
-      email: founder.email,
-      role_title: founder.role_title || undefined,
-      linkedin: founder.linkedin || undefined,
-      twitter: founder.twitter || undefined,
-      isExisting: true,
-    }])
-    setFounderSearch("")
-    setShowFounderSearch(false)
-  }
+  const canProceed = step === 1 ? formData.name.trim().length > 0 : true
   
-  const addNewFounder = () => {
-    if (!newFounderForm.name || !newFounderForm.email) return
-    
-    setFoundersList(prev => [...prev, {
-      id: `new-${Date.now()}`,
-      name: newFounderForm.name!,
-      email: newFounderForm.email!,
-      role_title: newFounderForm.role_title,
-      linkedin: newFounderForm.linkedin,
-      twitter: newFounderForm.twitter,
-      isExisting: false,
-    }])
-    setNewFounderForm({ name: "", email: "", role_title: "", linkedin: "", twitter: "" })
-    setShowNewFounderForm(false)
-  }
-  
-  const removeFounder = (id: string) => {
-    setFoundersList(prev => prev.filter(f => f.id !== id))
-  }
-  
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async () => {
     if (!formData.name.trim()) return
     
     setSaving(true)
     
     try {
-      // For now, use the first founder (schema only supports one founder_id)
-      // In the future, we can create a junction table for multiple founders
-      const primaryFounder = foundersList[0]
-      
       const companyData: any = {
         name: formData.name,
-        description: formData.description,
-        website: formData.website,
+        description: formData.description || undefined,
+        website: formData.website || undefined,
         stage: formData.stage,
         tags: formData.tags,
-        is_priority: formData.is_priority || undefined,
-        needs_diligence: formData.needs_diligence || undefined,
-        needs_followup: formData.needs_followup || undefined,
-        owner: formData.owner || undefined,
       }
       
-      // If we have an existing founder, use their ID (UUID reference)
-      if (primaryFounder?.isExisting) {
-        companyData.founder_id = primaryFounder.id
-      } else if (primaryFounder) {
-        // New founder - send founder object, API will create it first, then link by UUID
+      if (founder?.isExisting) {
+        companyData.founder_id = founder.id
+      } else if (founder) {
         companyData.founder = {
-          name: primaryFounder.name,
-          email: primaryFounder.email,
-          role_title: primaryFounder.role_title,
-          linkedin: primaryFounder.linkedin,
-          twitter: primaryFounder.twitter,
+          name: founder.name,
+          email: founder.email,
         }
       }
       
       const newCompany = await addCompany(companyData)
-      
-      if (newCompany && customFields.length > 0) {
-        // Save custom fields
-        try {
-          const customFieldsData = customFields
-            .filter(f => f.value.trim())
-            .map(f => ({
-              company_id: newCompany.id,
-              field_name: f.name,
-              field_type: f.type,
-              field_value: f.value,
-            }))
-          
-          if (customFieldsData.length > 0) {
-            await fetch('/api/companies/custom-fields', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ company_id: newCompany.id, fields: customFieldsData }),
-            })
-          }
-        } catch (error) {
-          console.error("Error saving custom fields:", error)
-          // Don't block navigation if custom fields fail
-        }
-      }
       
       if (newCompany) {
         router.push(`/company/${newCompany.id}`)
@@ -232,13 +112,27 @@ function AddCompanyForm() {
     }
   }
   
-  const toggleTag = (tagId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      tags: prev.tags.includes(tagId)
-        ? prev.tags.filter((id) => id !== tagId)
-        : [...prev.tags, tagId],
-    }))
+  const selectExistingFounder = (f: Founder) => {
+    setFounder({
+      id: f.id,
+      name: f.name,
+      email: f.email,
+      role_title: f.role_title || undefined,
+      isExisting: true,
+    })
+    setFounderSearch("")
+    setShowFounderDropdown(false)
+  }
+  
+  const addNewFounder = () => {
+    if (!newFounder.name.trim() || !newFounder.email.trim()) return
+    setFounder({
+      id: `new-${Date.now()}`,
+      name: newFounder.name,
+      email: newFounder.email,
+      isExisting: false,
+    })
+    setNewFounder({ name: "", email: "" })
   }
 
   return (
@@ -246,479 +140,291 @@ function AddCompanyForm() {
       <Sidebar activePage="pipeline" />
       
       <main className="flex flex-1 flex-col overflow-hidden">
-        {/* Header */}
-        <header className="flex items-center justify-between border-b px-8 py-4 flex-shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/pipeline"
-              className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-secondary smooth"
-            >
-              <ArrowLeftIcon className="h-4 w-4" />
-            </Link>
-            <div>
-              <h1 className="font-display text-lg font-semibold tracking-tight">
-                Add Company
-              </h1>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Create a new company in your deal pipeline
-              </p>
-            </div>
-          </div>
+        {/* Minimal Header */}
+        <header className="flex items-center justify-between px-8 py-5 flex-shrink-0">
+          <Link
+            href="/pipeline"
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground smooth group"
+          >
+            <svg className="h-4 w-4 group-hover:-translate-x-0.5 smooth" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            Back
+          </Link>
+          
           <div className="flex items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => router.push("/pipeline")}
-            >
-              Cancel
-            </Button>
-            <Button 
-              size="sm"
-              disabled={!formData.name.trim() || saving}
-              onClick={handleSubmit}
-            >
-              {saving ? "Adding..." : "Add Company"}
-            </Button>
+            {step > 1 && (
+              <Button variant="ghost" size="sm" onClick={() => setStep(step - 1)}>
+                Back
+              </Button>
+            )}
+            {step < 2 ? (
+              <Button size="sm" disabled={!canProceed} onClick={() => setStep(2)}>
+                Continue
+              </Button>
+            ) : (
+              <Button size="sm" disabled={saving} onClick={handleSubmit}>
+                {saving ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Creating...
+                  </span>
+                ) : "Add to Pipeline"}
+              </Button>
+            )}
           </div>
         </header>
         
-        {/* Form Content - Scrollable */}
-        <section className="flex-1 px-8 py-6 overflow-y-auto">
-          <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Left Column - Company Info */}
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-sm font-semibold mb-4 text-foreground">Company Information</h2>
-                  <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="name" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Company Name *</Label>
-                      <Input
-                        id="name"
-                        placeholder="Acme Inc."
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        required
-                        autoFocus
-                        className="h-10"
-                      />
+        {/* Progress indicator */}
+        <div className="px-8">
+          <div className="max-w-xl mx-auto flex gap-2">
+            <div className={cn("h-1 flex-1 rounded-full smooth", step >= 1 ? "bg-primary" : "bg-muted")} />
+            <div className={cn("h-1 flex-1 rounded-full smooth", step >= 2 ? "bg-primary" : "bg-muted")} />
+          </div>
+        </div>
+        
+        {/* Form Content */}
+        <section className="flex-1 px-8 py-8 overflow-y-auto">
+          <div className="max-w-xl mx-auto">
+            
+            {/* Step 1: Company Basics */}
+            {step === 1 && (
+              <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="text-center space-y-2">
+                  <h1 className="text-2xl font-semibold tracking-tight">Add a company</h1>
+                  <p className="text-muted-foreground">Start with the basics. You can add more details later.</p>
+                </div>
+                
+                {/* Company Name - Hero Input */}
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <Input
+                      ref={nameInputRef}
+                      placeholder="Company name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="h-14 text-lg px-4 border-2 focus:border-primary"
+                      onKeyDown={(e) => e.key === "Enter" && canProceed && setStep(2)}
+                    />
+                    {formData.name && (
+                      <p className="text-xs text-muted-foreground px-1">
+                        Press Enter to continue
+                      </p>
+                    )}
+                  </div>
+                  
+                  <Input
+                    placeholder="Website (optional)"
+                    value={formData.website}
+                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                    className="h-12"
+                  />
+                  
+                  <Textarea
+                    placeholder="What does this company do? (optional)"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="min-h-[100px] resize-none"
+                  />
+                  
+                  {/* Stage Selection */}
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium">Pipeline Stage</p>
+                    <div className="flex flex-wrap gap-2">
+                      {STAGES.map((stage) => (
+                        <button
+                          key={stage}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, stage })}
+                          className={cn(
+                            "px-4 py-2 rounded-full text-sm font-medium smooth border-2",
+                            formData.stage === stage
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-background border-border hover:border-primary/50"
+                          )}
+                        >
+                          {stage}
+                        </button>
+                      ))}
                     </div>
-                    
-                    <div className="space-y-1.5">
-                      <Label htmlFor="website" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Website</Label>
-                      <Input
-                        id="website"
-                        placeholder="https://acme.com"
-                        type="url"
-                        value={formData.website}
-                        onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                        className="h-10"
-                      />
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <Label htmlFor="description" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</Label>
-                      <Textarea
-                        id="description"
-                        placeholder="What does this company do? What problem are they solving?"
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        rows={4}
-                        className="resize-none"
-                      />
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <Label htmlFor="stage" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Stage</Label>
-                      <Select
-                        value={formData.stage}
-                        onValueChange={(v) => setFormData({ ...formData, stage: v as Stage })}
-                      >
-                        <SelectTrigger className="h-10">
-                          <SelectValue placeholder="Select stage" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {STAGES.map((stage) => (
-                            <SelectItem key={stage} value={stage}>
-                              {stage}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tags</Label>
+                  </div>
+                  
+                  {/* Tags */}
+                  {tags.length > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Tags</p>
                       <div className="flex flex-wrap gap-2">
                         {tags.map((tag) => (
                           <button
                             key={tag.id}
                             type="button"
-                            onClick={() => toggleTag(tag.id)}
-                            className={`px-3 py-1.5 rounded-full text-xs smooth transition-colors ${
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                tags: prev.tags.includes(tag.id)
+                                  ? prev.tags.filter(t => t !== tag.id)
+                                  : [...prev.tags, tag.id]
+                              }))
+                            }}
+                            className={cn(
+                              "px-3 py-1.5 rounded-full text-xs font-medium smooth",
                               formData.tags.includes(tag.id)
-                                ? "bg-primary text-primary-foreground"
+                                ? "bg-foreground text-background"
                                 : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-                            }`}
+                            )}
                           >
                             {tag.label}
                           </button>
                         ))}
-                        {tags.length === 0 && (
-                          <span className="text-xs text-muted-foreground">Loading tags...</span>
-                        )}
                       </div>
                     </div>
-                  </div>
-                </div>
-
-                {/* Pipeline Settings */}
-                <div>
-                  <h2 className="text-sm font-semibold mb-4 text-foreground">Pipeline Settings</h2>
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="is_priority"
-                        checked={formData.is_priority}
-                        onCheckedChange={(checked) => setFormData({ ...formData, is_priority: checked === true })}
-                      />
-                      <Label htmlFor="is_priority" className="text-sm font-normal cursor-pointer">
-                        Mark as Priority
-                      </Label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="needs_diligence"
-                        checked={formData.needs_diligence}
-                        onCheckedChange={(checked) => setFormData({ ...formData, needs_diligence: checked === true })}
-                      />
-                      <Label htmlFor="needs_diligence" className="text-sm font-normal cursor-pointer">
-                        Needs Diligence
-                      </Label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="needs_followup"
-                        checked={formData.needs_followup}
-                        onCheckedChange={(checked) => setFormData({ ...formData, needs_followup: checked === true })}
-                      />
-                      <Label htmlFor="needs_followup" className="text-sm font-normal cursor-pointer">
-                        Needs Follow-up
-                      </Label>
-                    </div>
-                    
-                    <div className="space-y-1.5 pt-2">
-                      <Label htmlFor="owner" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Owner</Label>
-                      <Input
-                        id="owner"
-                        placeholder="Your name or team member"
-                        value={formData.owner}
-                        onChange={(e) => setFormData({ ...formData, owner: e.target.value })}
-                        className="h-10"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <h2 className="text-sm font-semibold mb-4 text-foreground">Notes</h2>
-                  <Textarea
-                    placeholder="Initial thoughts, context, or additional notes..."
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    rows={4}
-                    className="resize-none"
-                  />
-                </div>
-
-                {/* Custom Fields */}
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-sm font-semibold text-foreground">Custom Fields</h2>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowAddCustomField(true)}
-                    >
-                      <svg className="h-3.5 w-3.5 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 5v14M5 12h14" />
-                      </svg>
-                      Add Field
-                    </Button>
-                  </div>
-                  
-                  {showAddCustomField && (
-                    <div className="flex gap-2 p-3 bg-muted/30 rounded-lg mb-3">
-                      <Input
-                        placeholder="Field name..."
-                        value={newCustomFieldName}
-                        onChange={(e) => setNewCustomFieldName(e.target.value)}
-                        className="flex-1 h-9"
-                      />
-                      <Select
-                        value={newCustomFieldType}
-                        onValueChange={(v) => setNewCustomFieldType(v as any)}
-                      >
-                        <SelectTrigger className="w-32 h-9">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="text">Text</SelectItem>
-                          <SelectItem value="url">URL</SelectItem>
-                          <SelectItem value="email">Email</SelectItem>
-                          <SelectItem value="date">Date</SelectItem>
-                          <SelectItem value="number">Number</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button type="button" size="sm" onClick={addCustomField} className="h-9">
-                        Add
-                      </Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddCustomField(false)} className="h-9">
-                        Cancel
-                      </Button>
-                    </div>
-                  )}
-                  
-                  {customFields.length > 0 && (
-                    <div className="space-y-3">
-                      {customFields.map((field) => (
-                        <div key={field.id} className="flex items-center gap-2">
-                          <Label className="w-32 text-xs text-muted-foreground truncate" title={field.name}>
-                            {field.name}
-                          </Label>
-                          <Input
-                            type={field.type === 'date' ? 'date' : field.type === 'number' ? 'number' : field.type}
-                            placeholder={`Enter ${field.name.toLowerCase()}...`}
-                            value={field.value}
-                            onChange={(e) => updateCustomField(field.id, e.target.value)}
-                            className="flex-1 h-9"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeCustomField(field.id)}
-                            className="h-9 w-9 flex items-center justify-center rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive smooth"
-                          >
-                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <line x1="18" y1="6" x2="6" y2="18" />
-                              <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {customFields.length === 0 && !showAddCustomField && (
-                    <p className="text-xs text-muted-foreground">
-                      Add custom fields to track additional information about this company.
-                    </p>
                   )}
                 </div>
               </div>
-              
-              {/* Right Column - Founders */}
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-sm font-semibold mb-4 text-foreground">Founders</h2>
-                  
-                  {/* Existing Founders List */}
-                  {foundersList.length > 0 && (
-                    <div className="space-y-2 mb-4">
-                      {foundersList.map((founder) => (
-                        <div key={founder.id} className="flex items-center gap-3 p-3 rounded-lg bg-secondary/40 border">
-                          <Avatar className="h-9 w-9 flex-shrink-0">
-                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-                              {founder.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{founder.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{founder.email}</p>
-                            {founder.role_title && (
-                              <p className="text-xs text-muted-foreground">{founder.role_title}</p>
-                            )}
-                          </div>
-                          {founder.isExisting && (
-                            <Badge variant="secondary" className="text-xs">Existing</Badge>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => removeFounder(founder.id)}
-                            className="flex-shrink-0 h-7 w-7 rounded-md hover:bg-destructive/10 flex items-center justify-center smooth"
-                          >
-                            <svg className="h-3.5 w-3.5 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <line x1="18" y1="6" x2="6" y2="18" />
-                              <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                          </button>
-                        </div>
-                      ))}
+            )}
+            
+            {/* Step 2: Founder */}
+            {step === 2 && (
+              <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="text-center space-y-2">
+                  <h1 className="text-2xl font-semibold tracking-tight">Who's the founder?</h1>
+                  <p className="text-muted-foreground">Connect a founder to {formData.name}</p>
+                </div>
+                
+                {/* Selected Founder */}
+                {founder && (
+                  <div className="p-4 rounded-xl border-2 border-primary bg-primary/5">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-12 w-12">
+                        <AvatarFallback className="bg-primary text-primary-foreground text-sm font-medium">
+                          {founder.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium">{founder.name}</p>
+                        <p className="text-sm text-muted-foreground truncate">{founder.email}</p>
+                      </div>
+                      {founder.isExisting && (
+                        <Badge variant="secondary" className="text-xs">Existing</Badge>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setFounder(null)}
+                        className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive smooth"
+                      >
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
                     </div>
-                  )}
-                  
-                  {/* Add Existing Founder */}
-                  {!showNewFounderForm && (
-                    <div className="space-y-2 mb-4">
+                  </div>
+                )}
+                
+                {/* Founder Search/Add */}
+                {!founder && (
+                  <div className="space-y-6">
+                    {/* Search existing */}
+                    <div className="space-y-2">
                       <div className="relative">
-                        <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <svg className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="11" cy="11" r="8" />
+                          <path d="m21 21-4.35-4.35" />
+                        </svg>
                         <Input
-                          placeholder="Search existing founders..."
+                          placeholder="Search founders by name or email..."
                           value={founderSearch}
                           onChange={(e) => {
                             setFounderSearch(e.target.value)
-                            setShowFounderSearch(true)
+                            setShowFounderDropdown(true)
                           }}
-                          onFocus={() => setShowFounderSearch(true)}
-                          className="pl-9 h-10"
+                          onFocus={() => setShowFounderDropdown(true)}
+                          className="h-12 pl-11"
                         />
                       </div>
                       
-                      {showFounderSearch && filteredFounders.length > 0 && (
-                        <div className="border rounded-lg overflow-hidden bg-background shadow-sm max-h-48 overflow-y-auto">
-                          {filteredFounders.map(founder => (
+                      {showFounderDropdown && filteredFounders.length > 0 && (
+                        <div className="border rounded-xl overflow-hidden bg-background shadow-lg">
+                          {filteredFounders.map(f => (
                             <button
-                              key={founder.id}
+                              key={f.id}
                               type="button"
-                              onClick={() => addExistingFounder(founder)}
-                              className="w-full flex items-center gap-3 p-2.5 hover:bg-secondary/50 smooth text-left"
+                              onClick={() => selectExistingFounder(f)}
+                              className="w-full flex items-center gap-3 p-3 hover:bg-secondary/50 smooth text-left border-b last:border-b-0"
                             >
-                              <Avatar className="h-7 w-7">
-                                <AvatarFallback className="bg-secondary text-[10px] font-medium">
-                                  {founder.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                              <Avatar className="h-9 w-9">
+                                <AvatarFallback className="bg-secondary text-xs font-medium">
+                                  {f.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{founder.name}</p>
-                                <p className="text-xs text-muted-foreground truncate">{founder.email}</p>
+                                <p className="text-sm font-medium truncate">{f.name}</p>
+                                <p className="text-xs text-muted-foreground truncate">{f.email}</p>
                               </div>
                             </button>
                           ))}
                         </div>
                       )}
-                      
-                      <div className="relative py-2">
-                        <div className="absolute inset-0 flex items-center">
-                          <span className="w-full border-t" />
-                        </div>
-                        <div className="relative flex justify-center text-xs">
-                          <span className="bg-background px-2 text-muted-foreground">or</span>
-                        </div>
+                    </div>
+                    
+                    {/* Divider */}
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t" />
                       </div>
-                      
+                      <div className="relative flex justify-center">
+                        <span className="bg-background px-4 text-xs text-muted-foreground">or add a new founder</span>
+                      </div>
+                    </div>
+                    
+                    {/* New founder quick add */}
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <Input
+                          placeholder="Name"
+                          value={newFounder.name}
+                          onChange={(e) => setNewFounder({ ...newFounder, name: e.target.value })}
+                          className="h-11"
+                        />
+                        <Input
+                          type="email"
+                          placeholder="Email"
+                          value={newFounder.email}
+                          onChange={(e) => setNewFounder({ ...newFounder, email: e.target.value })}
+                          className="h-11"
+                          onKeyDown={(e) => e.key === "Enter" && addNewFounder()}
+                        />
+                      </div>
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         className="w-full"
-                        onClick={() => setShowNewFounderForm(true)}
+                        onClick={addNewFounder}
+                        disabled={!newFounder.name.trim() || !newFounder.email.trim()}
                       >
-                        Add New Founder
+                        Add Founder
                       </Button>
                     </div>
-                  )}
-                  
-                  {/* New Founder Form */}
-                  {showNewFounderForm && (
-                    <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-medium">New Founder</h3>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setShowNewFounderForm(false)
-                            setNewFounderForm({ name: "", email: "", role_title: "", linkedin: "", twitter: "" })
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                      
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="new-founder-name" className="text-xs">Name *</Label>
-                          <Input
-                            id="new-founder-name"
-                            placeholder="Jane Smith"
-                            value={newFounderForm.name}
-                            onChange={(e) => setNewFounderForm({ ...newFounderForm, name: e.target.value })}
-                            className="h-9"
-                          />
-                        </div>
-                        
-                        <div className="space-y-1.5">
-                          <Label htmlFor="new-founder-email" className="text-xs">Email *</Label>
-                          <Input
-                            id="new-founder-email"
-                            type="email"
-                            placeholder="jane@example.com"
-                            value={newFounderForm.email}
-                            onChange={(e) => setNewFounderForm({ ...newFounderForm, email: e.target.value })}
-                            className="h-9"
-                          />
-                        </div>
-                        
-                        <div className="space-y-1.5">
-                          <Label htmlFor="new-founder-role" className="text-xs">Role / Title</Label>
-                          <Input
-                            id="new-founder-role"
-                            placeholder="CEO & Co-Founder"
-                            value={newFounderForm.role_title}
-                            onChange={(e) => setNewFounderForm({ ...newFounderForm, role_title: e.target.value })}
-                            className="h-9"
-                          />
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="new-founder-linkedin" className="text-xs">LinkedIn</Label>
-                            <Input
-                              id="new-founder-linkedin"
-                              placeholder="linkedin.com/in/..."
-                              value={newFounderForm.linkedin}
-                              onChange={(e) => setNewFounderForm({ ...newFounderForm, linkedin: e.target.value })}
-                              className="h-9"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="new-founder-twitter" className="text-xs">Twitter</Label>
-                            <Input
-                              id="new-founder-twitter"
-                              placeholder="@username"
-                              value={newFounderForm.twitter}
-                              onChange={(e) => setNewFounderForm({ ...newFounderForm, twitter: e.target.value })}
-                              className="h-9"
-                            />
-                          </div>
-                        </div>
-                        
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="w-full"
-                          onClick={addNewFounder}
-                          disabled={!newFounderForm.name || !newFounderForm.email}
-                        >
-                          Add Founder
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {foundersList.length === 0 && !showNewFounderForm && (
-                    <p className="text-xs text-muted-foreground text-center py-4">
-                      No founders added yet. Add an existing founder or create a new one.
-                    </p>
-                  )}
-                </div>
+                  </div>
+                )}
+                
+                {/* Skip option */}
+                {!founder && (
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    className="w-full text-sm text-muted-foreground hover:text-foreground smooth"
+                    disabled={saving}
+                  >
+                    Skip for now
+                  </button>
+                )}
               </div>
-            </div>
-          </form>
+            )}
+          </div>
         </section>
       </main>
     </div>
@@ -727,7 +433,11 @@ function AddCompanyForm() {
 
 export default function AddCompanyPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    }>
       <AddCompanyForm />
     </Suspense>
   )

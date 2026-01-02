@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get("type")
     const status = searchParams.get("status")
 
-    let query = supabase
+    // Note: Using 'as any' because reports table may not be in generated types yet
+    let query = (supabase as any)
       .from("reports")
       .select(`
         *,

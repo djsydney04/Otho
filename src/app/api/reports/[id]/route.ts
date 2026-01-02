@@ -21,17 +21,35 @@ export async function GET(
     const { id } = await params
 
     // Fetch report with all related data
-    const { data: report, error: reportError } = await supabase
+    // Note: Using simpler query to avoid TypeScript deep instantiation issues
+    // Cast supabase to any to bypass strict table type checking for reports table
+    const { data: report, error: reportError } = await (supabase as any)
       .from("reports")
-      .select(`
-        *,
-        company:companies(id, name, logo_url, stage, website, description, founder:founders(*)),
-        sections:report_sections(*),
-        sources:report_sources(*)
-      `)
+      .select("*, sections:report_sections(*), sources:report_sources(*)")
       .eq("id", id)
       .eq("user_id", user.id)
       .single()
+    
+    // Fetch company separately to avoid deep type nesting
+    let company = null
+    if (report?.company_id) {
+      const { data: companyData } = await supabase
+        .from("companies")
+        .select("id, name, logo_url, stage, website, description, founder_id")
+        .eq("id", report.company_id)
+        .single()
+      
+      if (companyData?.founder_id) {
+        const { data: founder } = await supabase
+          .from("founders")
+          .select("*")
+          .eq("id", companyData.founder_id)
+          .single()
+        company = { ...companyData, founder }
+      } else {
+        company = companyData
+      }
+    }
 
     if (reportError || !report) {
       return NextResponse.json(
@@ -42,10 +60,10 @@ export async function GET(
 
     // Sort sections by order_index
     if (report.sections) {
-      report.sections.sort((a: any, b: any) => a.order_index - b.order_index)
+      (report.sections as any[]).sort((a: any, b: any) => a.order_index - b.order_index)
     }
 
-    return NextResponse.json({ report })
+    return NextResponse.json({ report: { ...report, company } })
   } catch (error: any) {
     console.error("Error fetching report:", error)
     return NextResponse.json(
@@ -74,7 +92,7 @@ export async function DELETE(
 
     const { id } = await params
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("reports")
       .delete()
       .eq("id", id)

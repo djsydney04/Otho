@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import {
-  complete,
-  isOpenRouterConfigured,
-  MODELS,
-  chatCompletion,
-} from "@/lib/integrations/openrouter"
+import { simpleCompletion, isAIConfigured, MODEL_CONFIG } from "@/lib/ai"
 
 interface Article {
   title: string
@@ -17,7 +12,7 @@ export async function POST(request: NextRequest) {
   try {
     const { articles }: { articles: Article[] } = await request.json()
 
-    if (!isOpenRouterConfigured()) {
+    if (!isAIConfigured()) {
       return NextResponse.json({ error: "OPEN_ROUTER_API not configured" }, { status: 400 })
     }
 
@@ -25,37 +20,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No articles provided" }, { status: 400 })
     }
 
-    // For single article summary - use CHEAP tier
+    // For single article summary
     if (articles.length === 1) {
       const article = articles[0]
       const content = article.highlights?.join(" ") || article.text || article.title
 
-      const summary = await complete(
-        "summary",
+      const summary = await simpleCompletion(
         `Summarize this news article in 1-2 concise sentences for a venture capital investor. Focus on the key takeaway and why it matters for investors.
 
 Title: ${article.title}
 Content: ${content}
 
-Provide only the summary, no preamble.`
+Provide only the summary, no preamble.`,
+        { task: "summary" }
       )
 
       return NextResponse.json({
         summary: summary.trim(),
-        model: MODELS.WORKER,
+        model: MODEL_CONFIG.WORKER,
       })
     }
 
-    // For daily brief (multiple articles) - use WORKER tier
+    // For daily brief (multiple articles)
     const articleSummaries = articles.slice(0, 8).map((a) => 
       `- ${a.title}`
     ).join("\n")
 
-    const result = await chatCompletion({
-      model: MODELS.WORKER,
-      messages: [{
-        role: "user",
-        content: `You are an expert Venture Capital Analyst. Produce a concise, structured intelligence briefing from these headlines.
+    const briefSummary = await simpleCompletion(
+      `You are an expert Venture Capital Analyst. Produce a concise, structured intelligence briefing from these headlines.
 
 RULES:
 - Limit to 2-3 key themes
@@ -66,15 +58,16 @@ RULES:
 Headlines:
 ${articleSummaries}
 
-Return a brief, readable outline.`
-      }],
-      temperature: 0.4,
-      maxTokens: 260,
-    })
+Return a brief, readable outline.`,
+      {
+        task: "summary",
+        temperature: 0.4,
+      }
+    )
 
     return NextResponse.json({
-      briefSummary: result.content.trim(),
-      model: result.model,
+      briefSummary: briefSummary.trim(),
+      model: MODEL_CONFIG.WORKER,
     })
 
   } catch (error: any) {

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { buildContext } from "@/lib/integrations/context-builder"
-import { chatCompletion, MODELS } from "@/lib/integrations/openrouter"
+import { buildContext, simpleCompletion, MODEL_CONFIG } from "@/lib/ai"
 
 export const runtime = "nodejs"
 export const maxDuration = 300 // 5 minutes for report generation
@@ -67,7 +66,8 @@ export async function POST(request: NextRequest) {
     let report
     if (report_id) {
       // Update existing pending report
-      const { data: existingReport, error: reportError } = await supabase
+      // Note: Using 'as any' because reports table may not be in generated types yet
+      const { data: existingReport, error: reportError } = await (supabase as any)
         .from("reports")
         .update({
           status: "generating",
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       report = existingReport
     } else {
       // Create new report record
-      const { data: newReport, error: reportError } = await supabase
+      const { data: newReport, error: reportError } = await (supabase as any)
         .from("reports")
         .insert({
           company_id,
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
     ]
 
     if (sources.length > 0) {
-      await supabase.from("report_sources").insert(sources)
+      await (supabase as any).from("report_sources").insert(sources)
     }
 
     // Generate report content with OpenRouter
@@ -321,19 +321,12 @@ ${contextPack.sourceCitations}
 
 Generate the full report now. Be thorough and analytical. Every claim must cite sources using [S#] format.`
 
-    const response = await chatCompletion(
-      MODELS.WORKER, // Use worker model (free tier)
-      [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      {
-        temperature: 0.5, // Balanced for depth and creativity
-        max_tokens: 8000, // Allow for comprehensive reports
-      }
-    )
-
-    const reportContent = response.content
+    // Generate report using LangChain
+    const reportContent = await simpleCompletion(userPrompt, {
+      systemPrompt,
+      task: "report_generation",
+      temperature: 0.5,
+    })
 
     // Optional: Guard pass to validate citations
     const guardPrompt = `Review this report and verify:
@@ -369,12 +362,12 @@ Respond with JSON: {"valid": true/false, "issues": ["list of issues if any"]}`
     }))
 
     if (sectionInserts.length > 0) {
-      await supabase.from("report_sections").insert(sectionInserts)
+      await (supabase as any).from("report_sections").insert(sectionInserts)
     }
 
     // Update report with completed status
     const generationTime = Date.now() - startTime
-    await supabase
+    await (supabase as any)
       .from("reports")
       .update({
         status: "completed",

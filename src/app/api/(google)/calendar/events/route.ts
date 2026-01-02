@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { listEvents, matchEventsWithFounders } from "@/lib/integrations/google/calendar"
-import { MOCK_FOUNDERS } from "@/lib/mocks/pipeline"
+import { createClient } from "@/lib/supabase/server"
 
 // GET /api/calendar/events - List calendar events
 export async function GET(request: NextRequest) {
@@ -19,8 +19,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const timeMin = searchParams.get("timeMin") || undefined
     const timeMax = searchParams.get("timeMax") || undefined
-    const companyId = searchParams.get("companyId") || undefined
-    const matchFounders = searchParams.get("matchFounders") === "true"
+    const matchFoundersParam = searchParams.get("matchFounders") === "true"
 
     // Get events from Google Calendar
     const events = await listEvents(session.accessToken, {
@@ -30,9 +29,20 @@ export async function GET(request: NextRequest) {
     })
 
     // If we want to match with founders
-    if (matchFounders) {
-      const founderEmails = MOCK_FOUNDERS.filter(f => f.email).map((f) => f.email!.toLowerCase())
-      const founderNames = MOCK_FOUNDERS.filter(f => f.name).map((f) => f.name!)
+    if (matchFoundersParam) {
+      // Get founders from database
+      const supabase = await createClient()
+      const { data: founders } = await supabase
+        .from("founders")
+        .select("name, email")
+      
+      const founderEmails = founders
+        ?.filter(f => f.email)
+        .map(f => f.email!.toLowerCase()) || []
+      const founderNames = founders
+        ?.filter(f => f.name)
+        .map(f => f.name!) || []
+      
       const matchedEvents = matchEventsWithFounders(events, founderEmails, founderNames)
       
       return NextResponse.json({
@@ -48,9 +58,8 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("Calendar events error:", error)
     return NextResponse.json(
-      { error: error.message || "Failed to fetch events" },
+      { error: error.message || "Failed to fetch calendar events" },
       { status: 500 }
     )
   }
 }
-

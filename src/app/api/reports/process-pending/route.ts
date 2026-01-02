@@ -42,7 +42,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Get pending reports (filtered by user if not cron)
-    let query = supabase
+    // Note: Using 'as any' because reports table may not be in generated types yet
+    let query = (supabase as any)
       .from("reports")
       .select(`
         id,
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
         })
 
         // Mark as failed
-        await supabase
+        await (supabase as any)
           .from("reports")
           .update({
             status: "failed",
@@ -163,7 +164,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { count, error } = await supabase
+    const { count, error } = await (supabase as any)
       .from("reports")
       .select("*", { count: "exact", head: true })
       .eq("status", "pending")
