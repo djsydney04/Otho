@@ -244,7 +244,7 @@ src/
 - **Type Safety**: Full TypeScript with generated Supabase types
 - **API Route Groups**: Organized using Next.js route groups `(entities)`, `(google)`, `(ai)`, `(content)`
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 angellead/
