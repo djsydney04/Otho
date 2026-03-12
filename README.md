@@ -1,8 +1,8 @@
-# Angel Lead
+# Otho
 
 A modern VC portfolio management platform for angel investors and venture capitalists. Built with Next.js, Supabase, and AI-powered intelligence.
 
-## 📚 Table of Contents
+## Table of Contents
 
 - [Features](#features)
 - [Architecture Overview](#architecture-overview)
