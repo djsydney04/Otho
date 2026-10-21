@@ -17,7 +17,7 @@ export async function GET(
   
   // SECURITY: Verify founder is linked to at least one company owned by (or accessible to) the user
   // First check for companies with explicit ownership
-  let { data: userCompanies } = await supabase
+  const { data: userCompanies } = await supabase
     .from("companies")
     .select("id, founder_id, owner_id")
     .eq("founder_id", id)

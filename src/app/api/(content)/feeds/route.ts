@@ -225,7 +225,7 @@ function extractImage(xml: string): string | undefined {
 
 function cleanImageUrl(url: string): string {
   // Decode HTML entities
-  let cleaned = url
+  const cleaned = url
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")

@@ -23,7 +23,7 @@ interface AccountChatProps {
 // Simple markdown formatter - replaces asterisks with bullet points
 function FormattedMessage({ content }: { content: string }) {
   // Replace asterisk bullet points with proper bullets
-  let formattedContent = content.replace(/^\s*\*\s+/gm, '• ')
+  const formattedContent = content.replace(/^\s*\*\s+/gm, '• ')
   
   const formatInline = (text: string): React.ReactNode => {
     const parts: React.ReactNode[] = []

@@ -148,7 +148,7 @@ export function OthoReport({ companyId, founderId, initialInsights, name, websit
 
   const formatInsights = (text: string) => {
     // Replace asterisk bullet points with proper bullets
-    let formattedText = text.replace(/^\s*\*\s+/gm, '• ')
+    const formattedText = text.replace(/^\s*\*\s+/gm, '• ')
     
     const lines = formattedText.split('\n')
     return (
