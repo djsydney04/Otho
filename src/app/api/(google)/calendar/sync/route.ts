@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if token is expired and refresh if needed
-    let accessToken = userData.google_access_token
+    const accessToken = userData.google_access_token
     if (userData.google_token_expires_at && new Date(userData.google_token_expires_at) < new Date()) {
       // Token expired - would need to refresh using refresh_token
       // For now, return error asking user to reconnect

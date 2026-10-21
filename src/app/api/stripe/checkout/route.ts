@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const stripe = getStripe()
 
     // Get or create Stripe customer
-    let { data: billing } = await (supabase as any)
+    const { data: billing } = await (supabase as any)
       .from("billing_info")
       .select("*")
       .eq("user_id", user.id)

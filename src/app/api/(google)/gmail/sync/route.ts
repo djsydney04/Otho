@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if token is expired
-    let accessToken = userData.google_access_token
+    const accessToken = userData.google_access_token
     if (userData.google_token_expires_at && new Date(userData.google_token_expires_at) < new Date()) {
       return NextResponse.json(
         { error: "Google token expired. Please reconnect your Google account in Settings." },
